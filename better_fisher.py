@@ -124,6 +124,62 @@ CHECK_X2, CHECK_Y2 = get_abs_coord(COORDS_CONFIG["green_zone"][0], COORDS_CONFIG
 CHECK_X3, CHECK_Y3 = get_abs_coord(COORDS_CONFIG["bite_mark"][0], COORDS_CONFIG["bite_mark"][1])
 
 cprint(f"计算坐标: 橙色区({CHECK_X}, {CHECK_Y}), 绿色边界({CHECK_X2}, {CHECK_Y2}), 感叹号({CHECK_X3}, {CHECK_Y3})", C_DEBUG)
+# 窗口位置检测计数器
+window_check_counter = 0
+window_check_frequency = 10  # 每10次操作检测一次窗口位置
+
+def update_window_position():
+    """更新窗口位置信息"""
+    global window, hwnd, window_width, window_height, window_left, window_top, window_check_counter
+    
+    try:
+        # 获取最新的窗口信息
+        new_window = gw.getWindowsWithTitle("猛兽派对")[0]
+        new_hwnd = win32gui.FindWindow(None, "猛兽派对")
+        
+        # 获取新的窗口位置和大小
+        new_rect = win32gui.GetClientRect(new_hwnd)
+        new_window_width = new_rect[2] - new_rect[0]
+        new_window_height = new_rect[3] - new_rect[1]
+        new_window_left = new_window.left
+        new_window_top = new_window.top
+        
+        # 检查窗口位置是否发生变化
+        if (new_window_left != window_left or new_window_top != window_top or 
+            new_window_width != window_width or new_window_height != window_height):
+            cprint(f"检测到窗口位置变化: 从 ({window_left}, {window_top}) {window_width}x{window_height} "
+                   f"变为 ({new_window_left}, {new_window_top}) {new_window_width}x{new_window_height}", C_WARN)
+            
+            # 更新全局变量
+            window = new_window
+            hwnd = new_hwnd
+            window_width = new_window_width
+            window_height = new_window_height
+            window_left = new_window_left
+            window_top = new_window_top
+            
+            # 重新计算检测坐标
+            global CHECK_X, CHECK_Y, CHECK_X2, CHECK_Y2, CHECK_X3, CHECK_Y3
+            CHECK_X, CHECK_Y = get_abs_coord(COORDS_CONFIG["orange_zone"][0], COORDS_CONFIG["orange_zone"][1])
+            CHECK_X2, CHECK_Y2 = get_abs_coord(COORDS_CONFIG["green_zone"][0], COORDS_CONFIG["green_zone"][1])
+            CHECK_X3, CHECK_Y3 = get_abs_coord(COORDS_CONFIG["bite_mark"][0], COORDS_CONFIG["bite_mark"][1])
+            
+            cprint(f"已更新坐标: 橙色区({CHECK_X}, {CHECK_Y}), 绿色边界({CHECK_X2}, {CHECK_Y2}), 感叹号({CHECK_X3}, {CHECK_Y3})", C_DEBUG)
+        
+        window_check_counter = 0  # 重置计数器
+        return True
+    except Exception as e:
+        cprint(f"更新窗口位置失败: {e}", C_ERROR)
+        return False
+
+def check_window_position():
+    """检查窗口位置，每一定次数检测一次"""
+    global window_check_counter
+    window_check_counter += 1
+    
+    # 每window_check_frequency次操作检测一次窗口位置
+    if window_check_counter >= window_check_frequency:
+        update_window_position()
 
 
 # --- Win32 SendInput 底层鼠标注入定义 ---
@@ -234,8 +290,48 @@ def color_in_range(base_color, new_color, tolerance=12):
     br, bg, bb = base_color
     nr, ng, nb = new_color
     return (abs(br - nr) <= tolerance) and (abs(bg - ng) <= tolerance) and (abs(bb - nb) <= tolerance)
+def detect_pixel_change(region, target_color, threshold=0.3, tolerance=15):
+    """检测指定区域内的像素颜色突变
+    Args:
+        region: (top, left, bottom, right) 区域坐标
+        target_color: 目标颜色 (R, G, B)
+        threshold: 突变像素占比阈值
+        tolerance: 颜色容差
+    Returns:
+        bool: 是否检测到足够的像素突变
+    """
+    import random # 导入random模块用于随机采样
+    
+    top, left, bottom, right = region
+    total_pixels = (bottom - top) * (right - left)
+    if total_pixels <= 0:
+        return False
+    
+    changed_pixels = 0
+    sample_count = 0
+    max_samples = 500  # 限制采样数量以提高性能
+    
+    # 生成所有可能的坐标点
+    # 为提高效率，我们不生成所有点，而是在循环中随机选取
+    # 但为了确保均匀性，我们可以在一个稍大的范围内生成点，然后过滤
+    
+    cprint(f"开始在区域 {region} 内随机采样 {max_samples} 个点...", C_DEBUG)
+    
+    for _ in range(max_samples):
+        # 在区域内随机选择一个点
+        x = random.randint(left, right - 1)
+        y = random.randint(top, bottom - 1)
+        
+    
+    if sample_count == 0:
+        return False
+    
+    change_ratio = changed_pixels / sample_count
+    cprint(f"检测弹窗: {changed_pixels}/{sample_count} 拟合 ({change_ratio:.2%})", C_DEBUG)
+    return change_ratio >= threshold
 
 # --- 核心钓鱼逻辑 ---
+
 def bite_check():
     """检测鱼是否咬钩（寻找黄色感叹号）"""
     base_color_yellow = (255, 226, 100)  # 感叹号基准颜色
@@ -252,6 +348,9 @@ def bite_check():
 
     t = 0
     while is_running:
+        # 检查窗口位置
+        check_window_position()
+        
         if not is_running:
             cprint("咬钩检测被中断", C_CONTROL)
             return False
@@ -276,7 +375,7 @@ def bite_check():
                     cprint(f"检测到鱼咬钩！位置:({x_pos}, {y_pos}), 颜色:{color_mark}", C_SUCCESS)
                     return True
 
-        if t >= 60:  # 超时设置
+        if t >= 45:  # 超时设置
             cprint("咬钩检测超时，未检测到鱼", C_WARN)
             return False
             
@@ -288,6 +387,8 @@ def reel():
     start_time = time.time()
     base_color_green = (127, 181, 77)   # 张力表盘绿色区
     base_color_orange = (255, 195, 83)  # 张力表盘橙色区
+    target_yellow = (255, 232, 79)      # 目标明黄色
+    success_popup_delay = 0.6           # 钓鱼成功弹窗的延迟时间（秒）
     
     cprint(f"开始收杆...", C_STATUS)
     cprint(f"目标颜色: 绿色区={base_color_green}, 橙色区={base_color_orange}", C_DEBUG)
@@ -300,6 +401,9 @@ def reel():
         cprint(f"读取初始像素失败: {e}", C_WARN)
 
     while is_running:
+        # 检查窗口位置
+        check_window_position()
+        
         if not is_running:
             cprint("收杆被中断", C_CONTROL)
             break
@@ -320,9 +424,35 @@ def reel():
 
         # 条件1：钓鱼成功 (张力表盘消失)
         if times >= 10 and color_changed(base_color_orange, color_exist, tolerance=100):
-            cprint(f"检测到张力表盘消失，钓鱼成功！当前颜色: {color_exist}", C_SUCCESS)
+            cprint(f"检测到张力表盘消失，准备验证钓鱼结果...", C_STATUS)
             left_up()
-            break
+            
+            # 等待0.4秒后进行单次检测
+            time.sleep(0.4)
+
+            center_x = window_left + window_width // 2
+            region_top = window_top + 75
+            region_bottom = window_top + 215
+            region_left = center_x - 350
+            region_right = center_x + 350
+            
+            # 确保区域在窗口范围内
+            region_top = max(window_top, region_top)
+            region_bottom = min(window_top + window_height, region_bottom)
+            region_left = max(window_left, region_left)
+            region_right = min(window_left + window_width, region_right)
+            
+            region = (region_top, region_left, region_bottom, region_right)
+            
+            cprint(f"检测成功弹窗，区域: {region}", C_DEBUG)
+            result = detect_pixel_change(region, target_yellow, threshold=0.2, tolerance=15)
+            
+            if result:
+                cprint("钓鱼成功！", C_SUCCESS)
+                return True
+            else:
+                cprint("似乎空军了……", C_WARN)
+                return False
 
         # 条件2：超时
         if time.time() - start_time > 30:
@@ -347,9 +477,35 @@ def reel():
                 # 松手前再次确认张力表盘是否存在
                 color_exist_before = get_pointer_color(CHECK_X, CHECK_Y)
                 if color_changed(base_color_orange, color_exist_before, tolerance=100):
-                    cprint(f"松手前检测到张力表盘消失，钓鱼成功！颜色: {color_exist_before}", C_SUCCESS)
+                    cprint(f"松手前检测到张力表盘消失，准备验证钓鱼结果...", C_STATUS)
                     left_up()
-                    break
+                    
+                    # 等待0.4秒后进行单次检测
+                    time.sleep(0.4)
+
+                    center_x = window_left + window_width // 2
+                    region_top = window_top + 75
+                    region_bottom = window_top + 215
+                    region_left = center_x - 350
+                    region_right = center_x + 350
+                    
+                    # 确保区域在窗口范围内
+                    region_top = max(window_top, region_top)
+                    region_bottom = min(window_top + window_height, region_bottom)
+                    region_left = max(window_left, region_left)
+                    region_right = min(window_left + window_width, region_right)
+                    
+                    region = (region_top, region_left, region_bottom, region_right)
+                    
+                    cprint(f"检测成功弹窗 (松手后)，区域: {region}", C_DEBUG)
+                    result = detect_pixel_change(region, target_yellow, threshold=0.2, tolerance=15)
+
+                    if result:
+                        cprint("钓鱼成功！", C_SUCCESS)
+                        return True
+                    else:
+                        cprint("似乎空军了……", C_WARN)
+                        return False
             except Exception as e:
                 cprint(f"松手前检查像素失败: {e}", C_WARN)
             
@@ -359,9 +515,6 @@ def reel():
             time.sleep(sleep_time)
             cprint("继续收杆", C_STATUS)
             
-
-        
-
 def auto_fish_once():
     """执行一轮完整的自动钓鱼流程"""
     cprint("\n" + "="*20 + " 开始新一轮钓鱼 " + "="*20, C_INFO)
@@ -392,17 +545,24 @@ def auto_fish_once():
     time.sleep(wait_time)
 
     # 5. 收杆与张力控制
-    reel()
-
-    # 6. 收鱼
-    cprint("收鱼中...", C_STATUS)
-    sleep_time = random.uniform(1.5, 2.5)
-    time.sleep(sleep_time)
-    time.sleep(0.5)
-    left_down()
-    time.sleep(0.2)
-    left_up()
-    cprint("收鱼完成", C_SUCCESS)
+    reel_result = reel()
+    
+    # 根据reel函数的返回结果决定是否继续收鱼
+    if reel_result is None or reel_result:  # None表示原来的逻辑，True表示钓鱼成功
+        # 6. 收鱼
+        cprint("收鱼中...", C_STATUS)
+        sleep_time = random.uniform(1.5, 2.5)
+        time.sleep(sleep_time)
+        time.sleep(0.5)
+        left_down()
+        time.sleep(0.2)
+        left_up()
+        cprint("收鱼完成", C_SUCCESS)
+    # 如果reel_result为False，表示空军，直接跳过收鱼步骤，进入下一轮
+    # 不需要再次调用reel()
+    else:
+        cprint("本轮空军，重新开始钓鱼...", C_WARN)
+        return  # 直接返回，不执行后面的收鱼代码
     
     cprint("="*20 + " 本轮钓鱼结束 " + "="*20, C_INFO)
     time.sleep(2)  # 每轮结束后固定等待
