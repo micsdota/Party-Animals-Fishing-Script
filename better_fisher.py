@@ -16,6 +16,9 @@ except ImportError:
     print("错误: 缺少 pyautogui 库，请运行: pip install pyautogui")
     raise
 
+import cv2
+import numpy as np
+
 USE_KEYBOARD = True
 try:
     import keyboard
@@ -393,23 +396,41 @@ def detect_fish_rarity(region, threshold=0.1, tolerance=5):
     
     return best_rarity
 
-# --- 核心钓鱼逻辑 ---
+# 读取模板（保持透明通道）
+template = cv2.imread("exclamation_mark.png", cv2.IMREAD_UNCHANGED)
+template_bgr = template[:, :, :3]        # RGB部分
+template_alpha = template[:, :, 3]       # alpha通道作为mask
+w, h = template_bgr.shape[1], template_bgr.shape[0]
 
+def exclamation_check(screenshot_region=None):
+    """
+    执行模板匹配并返回最大匹配度值。
+    """
+    # 截屏
+    if screenshot_region:
+        left, top, width, height = screenshot_region
+        screenshot = pyautogui.screenshot(region=(left, top, width, height))
+    else:
+        screenshot = pyautogui.screenshot()
+    
+    # 转为BGR
+    img_bgr = cv2.cvtColor(np.array(screenshot), cv2.COLOR_RGB2BGR)
+
+    # 模板匹配（使用alpha通道作为mask）
+    res = cv2.matchTemplate(img_bgr, template_bgr, cv2.TM_CCOEFF_NORMED, mask=template_alpha)
+    _, max_val, _, _ = cv2.minMaxLoc(res)
+    return max_val
+
+# --- 核心钓鱼逻辑 ---
 def bite_check():
     """检测鱼是否咬钩（寻找黄色感叹号）"""
-    base_color_yellow = (255, 226, 100)  # 感叹号基准颜色
-    
-    # 基于窗口高度动态计算扫描范围
-    scan_height = int(0.4 * window_height)
-    start_y = max(window_top, CHECK_Y3 - scan_height // 2)
-    end_y = min(window_top + window_height, CHECK_Y3 + scan_height // 2)
-    step_y = 20
-    scan_ys = list(range(start_y, end_y + 1, step_y))
-    
     cprint(f"等待鱼咬钩...", C_STATUS)
-    cprint(f"咬钩检测范围: Y={start_y}-{end_y} (步长{step_y}), X=中心±20 (步长5)", C_DEBUG)
+    
+    match_count = 0
+    threshold = 0.6  # 匹配阈值
+    timeout = 40
+    start_time = time.time()
 
-    t = 0
     while is_running:
         # 检查窗口位置
         check_window_position()
@@ -418,27 +439,27 @@ def bite_check():
             cprint("咬钩检测被中断", C_CONTROL)
             return False
         
-        sleep_time = random.uniform(0.01, 0.05)
+        # 降低检查频率 (原 sleep_time * 4)
+        sleep_time = random.randint(4, 20) / 100
         time.sleep(sleep_time)
-        t += 1
         
-        if t % 15 == 0:
-            cprint(f"咬钩检测进行中 (检查第{t}次)...", C_DEBUG)
-            
-        for h in range(-20, 21, 5):  # 扩大X偏移范围
-            for y_pos in scan_ys:
-                if not is_running:
-                    cprint("咬钩检测被中断", C_CONTROL)
-                    return False
-                
-                x_pos = CHECK_X3 + h
-                color_mark = get_pointer_color(x_pos, y_pos)
-                
-                if color_in_range(base_color_yellow, color_mark, tolerance=25):
-                    cprint(f"检测到鱼咬钩！位置:({x_pos}, {y_pos}), 颜色:{color_mark}", C_SUCCESS)
-                    return True
+        match_count += 1
+        
+        # 执行模板匹配
+        match_val = exclamation_check(screenshot_region=(CHECK_X3-100, CHECK_Y3-50, 200, 300))
+        
+        is_success = match_val >= threshold
+        
+        # 每10次打印一次，或者成功时立即打印
+        if is_success or match_count % 10 == 0:
+            cprint(f"匹配次数: {match_count}, 匹配度: {match_val:.4f}, 阈值: {threshold}", C_DEBUG)
 
-        if t >= 45:  # 超时设置
+        if is_success:
+            cprint("有鱼咬钩！", C_SUCCESS)
+            return True
+
+        # 判断是否超时
+        if time.time() - start_time >= timeout:
             cprint("咬钩检测超时，未检测到鱼", C_WARN)
             return False
             
