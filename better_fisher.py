@@ -134,6 +134,32 @@ def save_statistics(data):
     except Exception as e:
         cprint(f"保存统计文件失败: {e}", C_ERROR)
 
+def load_all_statistics():
+    """加载当前统计文件和所有归档文件的统计数据"""
+    all_records = []
+    
+    # 加载当前统计文件
+    current_stats = load_statistics()
+    all_records.extend(current_stats.get("records", []))
+    
+    # 加载所有归档文件
+    archive_dir = "archived-data"
+    if os.path.exists(archive_dir):
+        try:
+            for filename in os.listdir(archive_dir):
+                if filename.startswith("sc-") and filename.endswith(".json"):
+                    filepath = os.path.join(archive_dir, filename)
+                    try:
+                        with open(filepath, 'r', encoding='utf-8') as f:
+                            archive_stats = json.load(f)
+                            all_records.extend(archive_stats.get("records", []))
+                    except Exception as e:
+                        cprint(f"加载归档文件 {filename} 失败: {e}", C_WARN)
+        except Exception as e:
+            cprint(f"读取归档目录失败: {e}", C_WARN)
+    
+    return {"records": all_records}
+
 def record_fishing_result(rarity):
     """记录单次钓鱼结果"""
     # 检查统计功能是否启用
@@ -161,15 +187,16 @@ def display_statistics():
         cprint("按 Ctrl+K 可以启用统计功能", C_INFO)
         return
         
-    stats = load_statistics()
-    records = stats.get("records", [])
+    # 加载当前统计文件
+    current_stats = load_statistics()
+    current_records = current_stats.get("records", [])
     
-    if not records:
+    if not current_records:
         cprint("暂无钓鱼统计数据", C_INFO)
         return
     
-    # 统计各稀有度数量
-    rarity_counts = {
+    # 统计当前文件各稀有度数量
+    current_rarity_counts = {
         'legendary': 0,
         'epic': 0,
         'rare': 0,
@@ -179,40 +206,48 @@ def display_statistics():
         'airforce': 0
     }
     
-    for record in records:
+    for record in current_records:
         rarity = record.get('rarity', 'airforce')
-        if rarity in rarity_counts:
-            rarity_counts[rarity] += 1
+        if rarity in current_rarity_counts:
+            current_rarity_counts[rarity] += 1
     
-    total_attempts = len(records)
-    total_fish = sum(rarity_counts[r] for r in rarity_counts if r != 'airforce')
-    airforce_count_total = rarity_counts['airforce']
-    airforce_rate = (airforce_count_total / total_attempts * 100) if total_attempts > 0 else 0
+    current_total_attempts = len(current_records)
+    current_airforce_count = current_rarity_counts['airforce']
+    current_airforce_rate = (current_airforce_count / current_total_attempts * 100) if current_total_attempts > 0 else 0
     
-    # 获取当前运行统计（基于内存计数器）
-    current_total_fish = legendary_count + epic_count + rare_count + extraordinary_count + standard_count + unknown_count
-    current_total_attempts = current_total_fish + airforce_count
-    current_airforce_rate = (airforce_count / current_total_attempts * 100) if current_total_attempts > 0 else 0
+    # 加载所有统计文件（当前+归档）
+    all_stats = load_all_statistics()
+    all_records = all_stats.get("records", [])
     
-    # 计算历史总和（包括当前运行）
-    total_rarity_counts = {
-        'legendary': rarity_counts['legendary'] + legendary_count,
-        'epic': rarity_counts['epic'] + epic_count,
-        'rare': rarity_counts['rare'] + rare_count,
-        'extraordinary': rarity_counts['extraordinary'] + extraordinary_count,
-        'standard': rarity_counts['standard'] + standard_count,
-        'unknown': rarity_counts['unknown'] + unknown_count,
-        'airforce': rarity_counts['airforce'] + airforce_count
+    # 统计所有文件各稀有度数量
+    all_rarity_counts = {
+        'legendary': 0,
+        'epic': 0,
+        'rare': 0,
+        'extraordinary': 0,
+        'standard': 0,
+        'unknown': 0,
+        'airforce': 0
     }
     
-    total_all_attempts = total_attempts + current_total_attempts
-    total_all_fish = sum(total_rarity_counts[r] for r in total_rarity_counts if r != 'airforce')
-    total_all_airforce_rate = (total_rarity_counts['airforce'] / total_all_attempts * 100) if total_all_attempts > 0 else 0
+    for record in all_records:
+        rarity = record.get('rarity', 'airforce')
+        if rarity in all_rarity_counts:
+            all_rarity_counts[rarity] += 1
+    
+    all_total_attempts = len(all_records)
+    all_airforce_count = all_rarity_counts['airforce']
+    all_airforce_rate = (all_airforce_count / all_total_attempts * 100) if all_total_attempts > 0 else 0
+    
+    # 获取当前运行统计（基于内存计数器）
+    current_run_fish = legendary_count + epic_count + rare_count + extraordinary_count + standard_count + unknown_count
+    current_run_attempts = current_run_fish + airforce_count
+    current_run_airforce_rate = (airforce_count / current_run_attempts * 100) if current_run_attempts > 0 else 0
     
     # 打印统计信息
     cprint("\n" + "="*50, C_INFO)
-    cprint("📊 钓鱼统计信息", C_INFO)
-    cprint("="*50, C_INFO)
+    cprint("\n" + "📊 钓鱼统计信息", C_INFO)
+    cprint("="*50 + "\n", C_INFO)
     
     chinese_rarity_names = {
         'legendary': '传奇鱼',
@@ -222,52 +257,29 @@ def display_statistics():
         'standard': '标准鱼',
         'unknown': '未知鱼'
     }
-    
-    # 显示当前运行统计
-    cprint("\n📈 本次运行统计:", C_STATUS)
-    cprint("-" * 30, C_STATUS)
+   
     for rarity in ['legendary', 'epic', 'rare', 'extraordinary', 'standard', 'unknown']:
-        count = getattr(globals(), f"{rarity}_count", 0)
-        if count > 0:  # 只显示有数据的项
-            rate = (count / current_total_attempts * 100) if current_total_attempts > 0 else 0
-            zh_name = chinese_rarity_names[rarity]
-            color = rarity_fg_colors[rarity] if rarity != 'unknown' else C_GRAY
-            cprint(f"{zh_name}: {count}条 ({rate:.2f}%)", color)
-    
-    if airforce_count > 0:
-        cprint(f"空军: {airforce_count}次 ({current_airforce_rate:.2f}%)", C_GRAY)
-    
-    if current_total_attempts > 0:
-        cprint(f"总计: {current_total_attempts}次", C_STATUS)
-    
-    # 显示历史统计（包含总和）
-    cprint("\n📚 历史记录统计:", C_INFO)
-    cprint("-" * 30, C_INFO)
-    for rarity in ['legendary', 'epic', 'rare', 'extraordinary', 'standard', 'unknown']:
-        count = rarity_counts[rarity]
-        total_count = total_rarity_counts[rarity]
+        current_count = current_rarity_counts[rarity]
+        all_count = all_rarity_counts[rarity]
         
-        if count > 0 or total_count > 0:  # 显示有数据的项
-            rate = (count / total_attempts * 100) if total_attempts > 0 else 0
-            total_rate = (total_count / total_all_attempts * 100) if total_all_attempts > 0 else 0
+        if current_count > 0 or all_count > 0:  # 显示有数据的项
+            current_rate = (current_count / current_total_attempts * 100) if current_total_attempts > 0 else 0
+            all_rate = (all_count / all_total_attempts * 100) if all_total_attempts > 0 else 0
             zh_name = chinese_rarity_names[rarity]
             color = rarity_fg_colors[rarity] if rarity != 'unknown' else C_GRAY
             
-            # 格式：历史记录 | 总和
-            if count > 0 and total_count > count:
-                cprint(f"{zh_name}: {count}条 ({rate:.2f}%)  |  共 {total_count}条 ({total_rate:.2f}%)", color)
-            elif count > 0:
-                cprint(f"{zh_name}: {count}条 ({rate:.2f}%)  |  共 {total_count}条 ({total_rate:.2f}%)", color)
-            elif total_count > 0:
-                cprint(f"{zh_name}: 0条 (0.00%)  |  共 {total_count}条 ({total_rate:.2f}%)", color)
+            # 格式：当前文件 | 所有文件总和
+            if current_count > 0:
+                cprint(f"{zh_name}: {current_count}条 ({current_rate:.2f}%)  |  共 {all_count}条 ({all_rate:.2f}%)", color)
+            elif all_count > 0:
+                cprint(f"{zh_name}: 0条 (0.00%)  |  共 {all_count}条 ({all_rate:.2f}%)", color)
     
-    # 显示空军统计
-    if airforce_count_total > 0:
-        total_airforce = total_rarity_counts['airforce']
-        cprint(f"空军: {airforce_count_total}次 ({airforce_rate:.2f}%)  |  共 {total_airforce}次 ({total_all_airforce_rate:.2f}%)", C_GRAY)
+    # 显示空军统计（总是显示，即使为0）
+    cprint(f"空军: {current_airforce_count}次 ({current_airforce_rate:.2f}%)    |  共 {all_airforce_count}次 ({all_airforce_rate:.2f}%)", C_GRAY)
     
-    cprint(f"总计: {total_attempts}次  |  共 {total_all_attempts}次", C_INFO)
-    cprint("="*50 + "\n", C_INFO)
+    cprint(f"总计: {current_total_attempts}次            |  共 {all_total_attempts}次", C_INFO)
+
+    cprint("\n" + "="*50 + "\n", C_INFO)
 
 def toggle_run():
     """切换脚本的运行/暂停状态"""
