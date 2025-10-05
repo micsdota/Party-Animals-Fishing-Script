@@ -1,3 +1,4 @@
 statistics-content.json
 __pycache__/
 *.pyc
+archived-data/

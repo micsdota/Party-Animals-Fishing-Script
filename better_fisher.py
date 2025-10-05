@@ -189,9 +189,29 @@ def display_statistics():
     airforce_count_total = rarity_counts['airforce']
     airforce_rate = (airforce_count_total / total_attempts * 100) if total_attempts > 0 else 0
     
+    # 获取当前运行统计（基于内存计数器）
+    current_total_fish = legendary_count + epic_count + rare_count + extraordinary_count + standard_count + unknown_count
+    current_total_attempts = current_total_fish + airforce_count
+    current_airforce_rate = (airforce_count / current_total_attempts * 100) if current_total_attempts > 0 else 0
+    
+    # 计算历史总和（包括当前运行）
+    total_rarity_counts = {
+        'legendary': rarity_counts['legendary'] + legendary_count,
+        'epic': rarity_counts['epic'] + epic_count,
+        'rare': rarity_counts['rare'] + rare_count,
+        'extraordinary': rarity_counts['extraordinary'] + extraordinary_count,
+        'standard': rarity_counts['standard'] + standard_count,
+        'unknown': rarity_counts['unknown'] + unknown_count,
+        'airforce': rarity_counts['airforce'] + airforce_count
+    }
+    
+    total_all_attempts = total_attempts + current_total_attempts
+    total_all_fish = sum(total_rarity_counts[r] for r in total_rarity_counts if r != 'airforce')
+    total_all_airforce_rate = (total_rarity_counts['airforce'] / total_all_attempts * 100) if total_all_attempts > 0 else 0
+    
     # 打印统计信息
     cprint("\n" + "="*50, C_INFO)
-    cprint("📊 历史钓鱼统计", C_INFO)
+    cprint("📊 钓鱼统计信息", C_INFO)
     cprint("="*50, C_INFO)
     
     chinese_rarity_names = {
@@ -203,23 +223,50 @@ def display_statistics():
         'unknown': '未知鱼'
     }
     
-    # 逐行显示各稀有度统计
+    # 显示当前运行统计
+    cprint("\n📈 本次运行统计:", C_STATUS)
+    cprint("-" * 30, C_STATUS)
+    for rarity in ['legendary', 'epic', 'rare', 'extraordinary', 'standard', 'unknown']:
+        count = getattr(globals(), f"{rarity}_count", 0)
+        if count > 0:  # 只显示有数据的项
+            rate = (count / current_total_attempts * 100) if current_total_attempts > 0 else 0
+            zh_name = chinese_rarity_names[rarity]
+            color = rarity_fg_colors[rarity] if rarity != 'unknown' else C_GRAY
+            cprint(f"{zh_name}: {count}条 ({rate:.2f}%)", color)
+    
+    if airforce_count > 0:
+        cprint(f"空军: {airforce_count}次 ({current_airforce_rate:.2f}%)", C_GRAY)
+    
+    if current_total_attempts > 0:
+        cprint(f"总计: {current_total_attempts}次", C_STATUS)
+    
+    # 显示历史统计（包含总和）
+    cprint("\n📚 历史记录统计:", C_INFO)
+    cprint("-" * 30, C_INFO)
     for rarity in ['legendary', 'epic', 'rare', 'extraordinary', 'standard', 'unknown']:
         count = rarity_counts[rarity]
-        rate = (count / total_attempts * 100) if total_attempts > 0 else 0
-        zh_name = chinese_rarity_names[rarity]
-        # 未知稀有度使用灰色显示
-        if rarity == 'unknown':
-            color = C_GRAY
-        else:
-            color = rarity_fg_colors[rarity]
-        cprint(f"{zh_name}: {count}条 ({rate:.2f}%)", color)
+        total_count = total_rarity_counts[rarity]
+        
+        if count > 0 or total_count > 0:  # 显示有数据的项
+            rate = (count / total_attempts * 100) if total_attempts > 0 else 0
+            total_rate = (total_count / total_all_attempts * 100) if total_all_attempts > 0 else 0
+            zh_name = chinese_rarity_names[rarity]
+            color = rarity_fg_colors[rarity] if rarity != 'unknown' else C_GRAY
+            
+            # 格式：历史记录 | 总和
+            if count > 0 and total_count > count:
+                cprint(f"{zh_name}: {count}条 ({rate:.2f}%)  |  共 {total_count}条 ({total_rate:.2f}%)", color)
+            elif count > 0:
+                cprint(f"{zh_name}: {count}条 ({rate:.2f}%)  |  共 {total_count}条 ({total_rate:.2f}%)", color)
+            elif total_count > 0:
+                cprint(f"{zh_name}: 0条 (0.00%)  |  共 {total_count}条 ({total_rate:.2f}%)", color)
     
     # 显示空军统计
-    cprint(f"空军: {airforce_count_total}次 ({airforce_rate:.2f}%)", C_GRAY)
+    if airforce_count_total > 0:
+        total_airforce = total_rarity_counts['airforce']
+        cprint(f"空军: {airforce_count_total}次 ({airforce_rate:.2f}%)  |  共 {total_airforce}次 ({total_all_airforce_rate:.2f}%)", C_GRAY)
     
-    # 显示总计
-    cprint(f"\n总钓鱼次数: {total_attempts}次", C_INFO)
+    cprint(f"总计: {total_attempts}次  |  共 {total_all_attempts}次", C_INFO)
     cprint("="*50 + "\n", C_INFO)
 
 def toggle_run():
@@ -252,16 +299,66 @@ def toggle_statistics():
         status = '启用' if STATISTICS_ENABLED else '禁用'
         cprint(f"统计功能已{status}", C_SUCCESS)
 
+def archive_statistics():
+    """归档当前统计文件并创建新的统计文件"""
+    if not os.path.exists(STATISTICS_FILE):
+        cprint("统计文件不存在，无法归档", C_WARN)
+        return
+    
+    try:
+        # 创建归档目录（如果不存在）
+        archive_dir = "archived-data"
+        if not os.path.exists(archive_dir):
+            os.makedirs(archive_dir)
+            cprint(f"已创建归档目录: {archive_dir}", C_DEBUG)
+        
+        # 创建归档文件名（带时间戳）
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        archive_filename = os.path.join(archive_dir, f"sc-{timestamp}.json")
+        
+        # 复制当前统计文件为归档文件
+        with open(STATISTICS_FILE, 'r', encoding='utf-8') as src:
+            data = src.read()
+        with open(archive_filename, 'w', encoding='utf-8') as dst:
+            dst.write(data)
+        
+        # 创建新的空统计文件
+        initial_data = {"records": []}
+        with open(STATISTICS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(initial_data, f, ensure_ascii=False, indent=2)
+        
+        cprint(f"统计文件已归档为: {archive_filename}", C_SUCCESS)
+        cprint("已创建新的统计文件，统计功能继续启用", C_SUCCESS)
+        
+        # 确保统计功能启用
+        STATISTICS_ENABLED = True
+        
+    except Exception as e:
+        cprint(f"归档统计文件失败: {e}", C_ERROR)
+
 def keyboard_listener():
     """监听键盘事件，用于暂停/恢复脚本和切换统计功能"""
+    ctrl_k_pressed = False  # 跟踪Ctrl+K是否被按下
+    
     while True:
         if USE_KEYBOARD:
             if keyboard.is_pressed('ctrl+l'):
                 toggle_run()
                 time.sleep(0.5)  # 防止按键重复检测
             elif keyboard.is_pressed('ctrl+k'):
-                toggle_statistics()
+                if not ctrl_k_pressed:
+                    ctrl_k_pressed = True
+                    toggle_statistics()
+                    time.sleep(0.5)  # 防止按键重复检测
+            elif keyboard.is_pressed('enter') and ctrl_k_pressed:
+                # Ctrl+K+Enter 组合键：归档统计文件
+                archive_statistics()
+                ctrl_k_pressed = False  # 重置状态
                 time.sleep(0.5)  # 防止按键重复检测
+            else:
+                # 如果Ctrl+K被释放，重置状态
+                if ctrl_k_pressed and not keyboard.is_pressed('ctrl+k'):
+                    ctrl_k_pressed = False
         time.sleep(0.1)
 
 # 在后台启动键盘监听线程
@@ -810,7 +907,7 @@ def reel():
                 rarity = detect_fish_unified(region, rarity_threshold=0.1, indicator_threshold=0.05, tolerance=5)
                 
                 if not is_running:
-                    return 'airforce'
+                    return None  # 程序中断时不记录为空军
                 
                 if rarity != 'airforce':
                     cprint(f"钓鱼成功！稀有度: {rarity}", C_SUCCESS)
@@ -899,7 +996,7 @@ def reel():
                         rarity = detect_fish_unified(region, rarity_threshold=0.1, indicator_threshold=0.05, tolerance=5)
                         
                         if not is_running:
-                            return 'airforce'
+                            return None  # 程序中断时不记录为空军
                         
                         if rarity != 'airforce':
                             cprint(f"钓鱼成功！稀有度: {rarity}", C_SUCCESS)
@@ -932,7 +1029,7 @@ def reel():
                 time.sleep(0.01)
                 elapsed += 0.01
             if not is_running:
-                return 'airforce'
+                return None  # 程序中断时不记录为空军
             cprint("继续收杆", C_STATUS)
 def auto_fish_once():
     """执行一轮完整的自动钓鱼流程"""
@@ -1018,7 +1115,11 @@ def auto_fish_once():
     reel_result = reel()
     
     # 处理结果
-    if reel_result == 'airforce':
+    if reel_result is None:
+        # 程序被中断，不记录任何结果
+        cprint("钓鱼过程被中断，不记录结果", C_WARN)
+        return
+    elif reel_result == 'airforce':
         airforce_count += 1
     else:
         # 6. 收鱼
@@ -1066,8 +1167,9 @@ def auto_fish_once():
         elif reel_result == 'unknown':
             unknown_count += 1
     
-    # 记录钓鱼结果到JSON
-    record_fishing_result(reel_result)
+    # 只有在reel_result不为None时才记录钓鱼结果
+    if reel_result is not None:
+        record_fishing_result(reel_result)
     
     # 如果统计功能未启用，提示用户可以启用统计功能
     if not STATISTICS_ENABLED:
@@ -1121,6 +1223,7 @@ if __name__ == "__main__":
     cprint("\n请将游戏窗口置于前台，脚本开始后不要移动窗口。", C_WARN)
     cprint(f"按 Ctrl+L 可以暂停或恢复脚本。", C_WARN)
     cprint(f"按 Ctrl+K 可以{'创建统计文件并' if not STATISTICS_ENABLED else ''}切换统计功能。", C_INFO)
+    cprint(f"按 Ctrl+K+Enter 可以归档当前统计文件并创建新的统计文件。", C_INFO)
     cprint(f"按 'q' 可以紧急终止脚本。", C_WARN)
     
     for i in range(3, 0, -1):
