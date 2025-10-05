@@ -818,7 +818,7 @@ def bite_check():
             if verify_with_opencv(img_bgr, blob_center, threshold=0.5):
                 cprint("有鱼咬钩！ (混合匹配成功)", C_SUCCESS)
                 # 使用可中断的随机等待
-                wait_time = random.uniform(0.1, 0.5)
+                wait_time = random.uniform(0.1, 0.2)
                 elapsed = 0
                 while elapsed < wait_time and is_running:
                     time.sleep(0.01)
