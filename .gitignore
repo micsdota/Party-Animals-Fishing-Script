@@ -17,9 +17,7 @@ venv.bak/
 
 # 构建和分发目录
 build/
-# 保留 dist 目录中的 exe 文件，但忽略其他文件
-dist/*
-!dist/*.exe
+dist/
 *.egg-info/
 
 # PyInstaller 相关文件

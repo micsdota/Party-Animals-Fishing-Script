@@ -58,6 +58,7 @@ STATISTICS_FILE = "statistics-content.json"
 
 # 全局变量
 is_running = True  # 控制主循环是否运行
+statistics_only_mode = False  # 仅统计模式标志
 legendary_count = 0
 epic_count = 0
 rare_count = 0
@@ -320,8 +321,17 @@ class FishingGUI:
         
         ttk.Label(status_frame, text="运行状态:", style='Info.TLabel').pack(anchor=tk.W)
         
-        self.status_label = tk.Label(status_frame, text="● 就绪", bg='#3c3c3c', fg='#00FF00', font=('Microsoft YaHei', 12, 'bold'))
-        self.status_label.pack(anchor=tk.W, pady=5)
+        # 状态标签容器
+        status_container = tk.Frame(status_frame, bg='#3c3c3c')
+        status_container.pack(anchor=tk.W, pady=5)
+        
+        self.status_label = tk.Label(status_container, text="● 就绪", bg='#3c3c3c', fg='#00FF00', font=('Microsoft YaHei', 12, 'bold'))
+        self.status_label.pack(side=tk.LEFT)
+        
+        # 模式指示器
+        self.mode_indicator = tk.Label(status_container, text="", bg='#3c3c3c', fg='#AAAAAA', font=('Microsoft YaHei', 9))
+        self.mode_indicator.pack(side=tk.LEFT, padx=(5, 0))
+        self.update_mode_indicator()
         
         # 分隔线
         separator2 = tk.Frame(status_card, bg='#555555', height=1)
@@ -347,11 +357,27 @@ class FishingGUI:
         
         ttk.Label(stats_control_frame, text="统计功能:", style='Info.TLabel').pack(anchor=tk.W)
         
-        self.toggle_stats_btn = ttk.Button(stats_control_frame, text="切换统计功能", command=self.toggle_statistics)
-        self.toggle_stats_btn.pack(fill=tk.X, pady=2)
+        # 按钮并排放置的容器
+        buttons_container = tk.Frame(stats_control_frame, bg='#3c3c3c')
+        buttons_container.pack(fill=tk.X, pady=2)
         
-        self.archive_stats_btn = ttk.Button(stats_control_frame, text="归档统计数据", command=self.archive_statistics)
-        self.archive_stats_btn.pack(fill=tk.X, pady=2)
+        # 左侧按钮
+        left_buttons = tk.Frame(buttons_container, bg='#3c3c3c')
+        left_buttons.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        
+        self.toggle_stats_btn = ttk.Button(left_buttons, text="切换统计功能", command=self.toggle_statistics)
+        self.toggle_stats_btn.pack(fill=tk.X, pady=(2, 2))
+        
+        # 右侧按钮
+        right_buttons = tk.Frame(buttons_container, bg='#3c3c3c')
+        right_buttons.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(5, 0))
+        
+        self.archive_stats_btn = ttk.Button(right_buttons, text="归档统计数据", command=self.archive_statistics)
+        self.archive_stats_btn.pack(fill=tk.X, pady=(2, 2))
+        
+        # 切换仅统计模式按钮
+        self.toggle_mode_btn = ttk.Button(stats_control_frame, text="切换仅统计模式", command=self.toggle_statistics_mode)
+        self.toggle_mode_btn.pack(fill=tk.X, pady=2)
         
         # 分隔线
         separator4 = tk.Frame(status_card, bg='#555555', height=1)
@@ -367,6 +393,7 @@ class FishingGUI:
             "Ctrl+L: 暂停/恢复",
             "Ctrl+K: 切换统计",
             "Ctrl+K+Enter: 归档",
+            "Ctrl+M: 切换仅统计",
             "Q: 紧急停止"
         ]
         
@@ -416,6 +443,14 @@ class FishingGUI:
             self.stats_status_label.config(text="✅ 统计功能已启用")
         else:
             self.stats_status_label.config(text="❌ 统计功能已禁用")
+            
+    def update_mode_indicator(self):
+        """更新模式指示器"""
+        global statistics_only_mode
+        if statistics_only_mode:
+            self.mode_indicator.config(text="（仅统计）")
+        else:
+            self.mode_indicator.config(text="（托管）")
             
     def add_log(self, message, log_type='INFO'):
         """添加日志消息"""
@@ -678,12 +713,17 @@ class FishingGUI:
         
     def fishing_loop(self):
         """钓鱼循环"""
-        global is_running
+        global is_running, statistics_only_mode
         
         while is_running:
             try:
-                # 执行一次钓鱼
-                auto_fish_once()
+                # 根据模式执行不同的钓鱼逻辑
+                if statistics_only_mode:
+                    # 仅统计模式：不执行游戏操作，只进行检测和记录
+                    auto_fish_logger_once()
+                else:
+                    # 自动钓鱼模式：执行完整的钓鱼流程
+                    auto_fish_once()
                 
                 # 更新统计显示
                 self.root.after(0, self.update_current_statistics)
@@ -719,6 +759,20 @@ class FishingGUI:
             status = '启用' if STATISTICS_ENABLED else '禁用'
             self.add_log(f"统计功能已{status}", 'SUCCESS')
             self.update_stats_status()
+            
+    def toggle_statistics_mode(self):
+        """切换仅统计模式"""
+        global statistics_only_mode
+        statistics_only_mode = not statistics_only_mode
+        
+        if statistics_only_mode:
+            self.add_log("已切换到仅统计模式（不执行游戏操作）", 'SUCCESS')
+            self.toggle_mode_btn.config(text="切换到自动钓鱼模式")
+        else:
+            self.add_log("已切换到自动钓鱼模式（托管）", 'SUCCESS')
+            self.toggle_mode_btn.config(text="切换仅统计模式")
+            
+        self.update_mode_indicator()
             
     def archive_statistics(self):
         """归档统计数据"""
@@ -1733,6 +1787,10 @@ def keyboard_listener():
                 gui.archive_statistics()
                 ctrl_k_pressed = False  # 重置状态
                 time.sleep(0.5)  # 防止按键重复检测
+            elif keyboard.is_pressed('ctrl+m'):
+                # Ctrl+M 组合键：切换仅统计模式
+                gui.toggle_statistics_mode()
+                time.sleep(0.5)  # 防止按键重复检测
             else:
                 # 如果Ctrl+K被释放，重置状态
                 if ctrl_k_pressed and not keyboard.is_pressed('ctrl+k'):
@@ -1797,3 +1855,161 @@ if __name__ == "__main__":
     
     # 启动GUI主循环
     root.mainloop()
+
+# --- 仅统计模式的钓鱼逻辑 ---
+def auto_fish_logger_once():
+    """仅统计模式下的钓鱼记录逻辑（不执行任何游戏操作）"""
+    global legendary_count, epic_count, rare_count, extraordinary_count, standard_count, unknown_count, airforce_count
+    
+    gui.add_log("=== 开始仅统计模式记录 ===", 'INFO')
+    
+    # 1. 等待鱼咬钩
+    if not bite_check_logger():
+        gui.add_log("本轮未检测到咬钩或被中断", 'WARNING')
+        return
+    
+    # 2. 检测到咬钩后等待2秒
+    gui.add_log("检测到叹号后等待2秒...", 'STATUS')
+    elapsed = 0
+    while elapsed < 2 and is_running:
+        time.sleep(0.01)
+        elapsed += 0.01
+    if not is_running:
+        return
+    
+    # 3. 开始检测压力表盘是否消失
+    gui.add_log("开始检测压力表盘是否消失...", 'STATUS')
+    base_color_orange = (255, 195, 83)
+    start_time = time.time()
+    timeout = 30
+    
+    while is_running:
+        if time.time() - start_time > timeout:
+            gui.add_log("检测压力表盘超时（30秒），判定为空军", 'WARNING')
+            airforce_count += 1
+            record_fishing_result('airforce')
+            gui.add_log("这次钓鱼空军", 'WARNING')
+            break
+        
+        try:
+            color_exist = get_pointer_color(CHECK_X, CHECK_Y)
+        except Exception as e:
+            gui.add_log(f"读取像素失败: {e}", 'WARNING')
+            time.sleep(0.1)
+            continue
+        
+        if color_changed(base_color_orange, color_exist, tolerance=100):
+            gui.add_log("检测到压力表盘消失，开始检测稀有度...", 'SUCCESS')
+            
+            # 等待0.4秒让UI稳定
+            elapsed = 0
+            while elapsed < 0.4 and is_running:
+                time.sleep(0.01)
+                elapsed += 0.01
+            if not is_running:
+                return
+            
+            # 根据不同分辨率设置不同的检测区域
+            center_x = window_left + window_width // 2
+            if window_width == 1920 and window_height == 1080:
+                region = (window_top + 160, window_left + 875, window_top + 200, window_left + 960)
+            elif window_width == 3840 and window_height == 2160:
+                region = (window_top + 230, center_x - 130, window_top + 320, center_x + 20)
+            else:
+                region = (window_top + 190, center_x - 130, window_top + 250, center_x + 20)
+            
+            # 检测鱼的稀有度
+            rarity = detect_fish_unified(region, rarity_threshold=0.1, indicator_threshold=0.05, tolerance=5)
+            
+            if rarity != 'airforce':
+                gui.add_log(f"钓鱼成功！稀有度: {rarity}", 'SUCCESS')
+            else:
+                gui.add_log("判定为空军", 'WARNING')
+            
+            # 更新计数器
+            if rarity == 'legendary':
+                legendary_count += 1
+            elif rarity == 'epic':
+                epic_count += 1
+            elif rarity == 'rare':
+                rare_count += 1
+            elif rarity == 'extraordinary':
+                extraordinary_count += 1
+            elif rarity == 'standard':
+                standard_count += 1
+            elif rarity == 'unknown':
+                unknown_count += 1
+            elif rarity == 'airforce':
+                airforce_count += 1
+            
+            # 记录结果
+            record_fishing_result(rarity)
+            
+            # 打印本次结果
+            if rarity == 'airforce':
+                gui.add_log("这次钓鱼空军", 'WARNING')
+            elif rarity == 'unknown':
+                gui.add_log("这次钓到了鱼，但稀有度未知", 'WARNING')
+            else:
+                chinese_rarity = {
+                    'legendary': '传奇',
+                    'epic': '史诗',
+                    'rare': '稀有',
+                    'extraordinary': '非凡',
+                    'standard': '标准'
+                }
+                zh_name = chinese_rarity[rarity]
+                gui.add_log(f"这次钓到了{zh_name}鱼", 'SUCCESS')
+            break
+        
+        time.sleep(0.1)
+    
+    gui.add_log("=== 仅统计模式记录结束 ===", 'INFO')
+    
+    # 使用可中断的等待
+    elapsed = 0
+    while elapsed < 2 and is_running:
+        time.sleep(0.01)
+        elapsed += 0.01
+
+def bite_check_logger():
+    """仅统计模式下的咬钩检测（不执行任何游戏操作）"""
+    gui.add_log(f"等待鱼咬钩（仅统计模式）...", 'STATUS')
+    timeout = 40
+    start_time = time.time()
+    
+    check_interval = 0.1  # 每0.1秒检测一次
+    
+    while is_running:
+        # 使用可中断的等待
+        elapsed = 0
+        while elapsed < check_interval and is_running:
+            time.sleep(0.01)  # 小段睡眠，便于快速响应中断
+            elapsed += 0.01
+        
+        if not is_running:
+            break
+            
+        # 1. 快速颜色定位
+        try:
+            screenshot = pyautogui.screenshot(region=roi_search_area)
+            img_bgr = cv2.cvtColor(np.array(screenshot), cv2.COLOR_RGB2BGR)
+        except Exception as e:
+            gui.add_log(f"截图失败: {e}", 'WARNING')
+            continue
+            
+        blob_center = find_yellow_blob(img_bgr)
+        
+        if blob_center:
+            # 2. 精确OpenCV模板验证
+            if verify_with_opencv(img_bgr, blob_center, threshold=0.5):
+                gui.add_log("检测到叹号！（仅统计模式）", 'SUCCESS')
+                return True
+
+        # 判断是否超时
+        if time.time() - start_time >= timeout:
+            gui.add_log("咬钩检测超时，未检测到鱼", 'WARNING')
+            return False
+            
+    gui.add_log("咬钩检测被中断", 'INFO')
+    return False
