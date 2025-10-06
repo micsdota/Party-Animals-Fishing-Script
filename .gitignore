@@ -2,3 +2,8 @@ statistics-content.json
 __pycache__/
 *.pyc
 archived-data/
+dist/
+build/
+.env
+.venv/
+better_fisher_logger.spec
