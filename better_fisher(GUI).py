@@ -320,10 +320,10 @@ class FishingGUI:
         control_frame = tk.Frame(status_card, bg='#3c3c3c')
         control_frame.pack(fill=tk.X, padx=10, pady=10)
         
-        self.start_btn = ttk.Button(control_frame, text="▶️ 开始钓鱼", command=self.start_fishing)
+        self.start_btn = ttk.Button(control_frame, text="▶ 开始钓鱼", command=self.start_fishing)
         self.start_btn.pack(fill=tk.X, pady=2)
         
-        self.stop_btn = ttk.Button(control_frame, text="⏸️ 暂停钓鱼", command=self.stop_fishing, state=tk.DISABLED)
+        self.stop_btn = ttk.Button(control_frame, text="⏸ 暂停钓鱼", command=self.stop_fishing, state=tk.DISABLED)
         self.stop_btn.pack(fill=tk.X, pady=2)
         
         # 分隔线
@@ -1726,18 +1726,31 @@ if __name__ == "__main__":
     # 创建GUI实例
     gui = FishingGUI(root)
     
-    # 初始化窗口设置
-    if not initialize_window():
-        gui.add_log("初始化窗口失败，程序退出", 'ERROR')
-        root.destroy()
-        sys.exit(1)
-        
     # 初始化ROI
-    if not initialize_roi():
-        gui.add_log("初始化ROI失败，程序退出", 'ERROR')
-        root.destroy()
-        sys.exit(1)
+    # 在后台线程中检测窗口和初始化ROI
+    window_initialized = False
+    def window_detection_thread():
+        global window_initialized
+        while not window_initialized:
+            if initialize_window():
+                window_initialized = True
+                gui.add_log("游戏窗口检测成功", 'SUCCESS')
+                gui.status_label.config(text="● 就绪", fg='#00FF00')
+                
+                # 初始化ROI
+                if not initialize_roi():
+                    gui.add_log("初始化ROI失败", 'ERROR')
+                else:
+                    gui.add_log("ROI初始化成功", 'SUCCESS')
+            else:
+                gui.add_log("错误: 未找到 '猛兽派对' 游戏窗口，请确保游戏正在运行。", 'ERROR')
+                gui.add_log("程序将继续每0.5秒检测一次窗口，直到找到游戏窗口为止...", 'WARNING')
+                gui.status_label.config(text="● 等待游戏窗口", fg='#FFAA00')
+                time.sleep(0.5)
     
+    # 启动窗口检测线程
+    detection_thread = threading.Thread(target=window_detection_thread, daemon=True)
+    detection_thread.start()
     # 在后台启动键盘监听线程
     listener_thread = threading.Thread(target=keyboard_listener, daemon=True)
     listener_thread.start()
