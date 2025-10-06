@@ -890,10 +890,10 @@ def reel():
             center_x = window_left + window_width // 2
             # 根据不同分辨率设置不同的检测区域
             if window_width == 1920 and window_height == 1080:
-                region_top = window_top + 115
-                region_bottom = window_top + 160
-                region_left = center_x - 100
-                region_right = center_x + 10
+                region_top = window_top + 160
+                region_bottom = window_top + 200
+                region_left = window_left + 875
+                region_right = window_left + 960
             elif window_width == 3840 and window_height == 2160:
                 region_top = window_top + 230
                 region_bottom = window_top + 320
@@ -978,10 +978,10 @@ def reel():
                     center_x = window_left + window_width // 2
                     # 根据不同分辨率设置不同的检测区域
                     if window_width == 1920 and window_height == 1080:
-                        region_top = window_top + 115
-                        region_bottom = window_top + 160
-                        region_left = center_x - 100
-                        region_right = center_x + 10
+                        region_top = window_top + 160
+                        region_bottom = window_top + 200
+                        region_left = window_left + 875
+                        region_right = window_left + 960
                     elif window_width == 3840 and window_height == 2160:
                         region_top = window_top + 230
                         region_bottom = window_top + 320

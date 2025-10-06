@@ -506,7 +506,7 @@ def wait_for_reel_end_and_log():
 
             center_x = window_left + window_width // 2
             if window_width == 1920 and window_height == 1080:
-                region = (window_top + 115, center_x - 100, window_top + 160, center_x + 10)
+                region = (window_top + 160, window_left + 875, window_top + 200, window_left + 960)
             elif window_width == 3840 and window_height == 2160:
                 region = (window_top + 230, center_x - 130, window_top + 320, center_x + 20)
             else:

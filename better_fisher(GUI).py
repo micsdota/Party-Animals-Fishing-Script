@@ -9,6 +9,17 @@ import pygetwindow as gw
 import json
 import os
 from datetime import datetime
+
+def resource_path(relative_path):
+    """ Get absolute path to resource, works for dev and for PyInstaller """
+    try:
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+
+    return os.path.join(base_path, relative_path)
+
 import tkinter as tk
 from tkinter import ttk, scrolledtext, messagebox
 import threading
@@ -1197,7 +1208,7 @@ def initialize_roi():
     UPPER_YELLOW = np.array([28, 255, 255])
 
     # 3. 读取OpenCV模板（保持透明通道）
-    template = cv2.imread("exclamation_mark.png", cv2.IMREAD_UNCHANGED)
+    template = cv2.imread(resource_path("exclamation_mark.png"), cv2.IMREAD_UNCHANGED)
     if template is None:
         if hasattr(gui, 'add_log'):
             gui.add_log("错误: 未找到 exclamation_mark.png 模板文件", 'ERROR')
@@ -1373,10 +1384,10 @@ def reel():
             center_x = window_left + window_width // 2
             # 根据不同分辨率设置不同的检测区域
             if window_width == 1920 and window_height == 1080:
-                region_top = window_top + 115
-                region_bottom = window_top + 160
-                region_left = center_x - 100
-                region_right = center_x + 10
+                region_top = window_top + 160
+                region_bottom = window_top + 200
+                region_left = window_left + 875
+                region_right = window_left + 960
             elif window_width == 3840 and window_height == 2160:
                 region_top = window_top + 230
                 region_bottom = window_top + 320
@@ -1468,10 +1479,10 @@ def reel():
                     center_x = window_left + window_width // 2
                     # 根据不同分辨率设置不同的检测区域
                     if window_width == 1920 and window_height == 1080:
-                        region_top = window_top + 115
-                        region_bottom = window_top + 160
-                        region_left = center_x - 100
-                        region_right = center_x + 10
+                        region_top = window_top + 160
+                        region_bottom = window_top + 200
+                        region_left = window_left + 875
+                        region_right = window_left + 960
                     elif window_width == 3840 and window_height == 2160:
                         region_top = window_top + 230
                         region_bottom = window_top + 320

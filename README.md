@@ -4,7 +4,7 @@
 
 ---
 
-## 巨献：better_fisher(GUI)
+## 巨献：GUI版本 (`better_fisher(GUI)`)
 
 强烈推荐您使用 **GUI版本** (`better_fisher(GUI).py`)，它提供了以下显著优势：
 
