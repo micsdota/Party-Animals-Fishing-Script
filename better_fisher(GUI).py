@@ -264,6 +264,29 @@ class FishingGUI:
             total_label = tk.Label(row_frame, text="0条 (0.0%)", bg='#3c3c3c', fg='#CCCCCC', font=('Microsoft YaHei', 8), width=12)
             setattr(self, f"total_{rarity}_label", total_label)
             total_label.pack(side=tk.LEFT)
+        
+        # 创建样本量行
+        sample_frame = tk.Frame(parent, bg='#3c3c3c')
+        sample_frame.pack(fill=tk.X, pady=2)
+        
+        # 创建样本量分隔线
+        sample_separator = tk.Frame(parent, bg='#555555', height=1)
+        sample_separator.pack(fill=tk.X, pady=2)
+        
+        # 样本量标签
+        sample_row = tk.Frame(parent, bg='#3c3c3c')
+        sample_row.pack(fill=tk.X, pady=1)
+        
+        label_name = tk.Label(sample_row, text="样本量:", bg='#3c3c3c', fg='#AAAAAA', font=('Microsoft YaHei', 9, 'bold'), width=8)
+        label_name.pack(side=tk.LEFT)
+        
+        # 本次样本量标签
+        self.current_sample_label = tk.Label(sample_row, text="0次", bg='#3c3c3c', fg='#CCCCCC', font=('Microsoft YaHei', 8), width=12)
+        self.current_sample_label.pack(side=tk.LEFT)
+        
+        # 总和样本量标签
+        self.total_sample_label = tk.Label(sample_row, text="0次", bg='#3c3c3c', fg='#CCCCCC', font=('Microsoft YaHei', 8), width=12)
+        self.total_sample_label.pack(side=tk.LEFT)
             
     def create_status_panel(self, parent):
         """创建状态控制面板"""
@@ -454,17 +477,43 @@ class FishingGUI:
         # 更新总和统计
         self.update_total_statistics()
         
+    def load_all_statistics(self):
+        """加载当前统计文件和所有归档文件的统计数据"""
+        all_records = []
+        
+        # 加载当前统计文件
+        current_stats = load_statistics()
+        all_records.extend(current_stats.get("records", []))
+        
+        # 加载所有归档文件
+        archive_dir = "archived-data"
+        if os.path.exists(archive_dir):
+            try:
+                for filename in os.listdir(archive_dir):
+                    if filename.startswith("sc-") and filename.endswith(".json"):
+                        filepath = os.path.join(archive_dir, filename)
+                        try:
+                            with open(filepath, 'r', encoding='utf-8') as f:
+                                archive_stats = json.load(f)
+                                all_records.extend(archive_stats.get("records", []))
+                        except Exception as e:
+                            self.add_log(f"加载归档文件 {filename} 失败: {e}", 'WARNING')
+            except Exception as e:
+                self.add_log(f"读取归档目录失败: {e}", 'WARNING')
+        
+        return {"records": all_records}
+
     def update_total_statistics(self):
-        """更新总和统计（本次+历史）"""
+        """更新本次统计和历史总和统计"""
         if not STATISTICS_ENABLED:
             return
             
-        # 加载统计数据
-        stats = load_statistics()
-        records = stats.get("records", [])
+        # 加载当前统计数据
+        current_stats = load_statistics()
+        current_records = current_stats.get("records", [])
         
-        # 统计各稀有度数量
-        history_counts = {
+        # 统计当前文件各稀有度数量
+        current_counts = {
             'legendary': 0,
             'epic': 0,
             'rare': 0,
@@ -474,21 +523,64 @@ class FishingGUI:
             'airforce': 0
         }
         
-        for record in records:
+        for record in current_records:
             rarity = record.get('rarity', 'airforce')
-            if rarity in history_counts:
-                history_counts[rarity] += 1
+            if rarity in current_counts:
+                current_counts[rarity] += 1
         
-        # 计算总和（历史+本次）
+        current_fish = (current_counts['legendary'] + current_counts['epic'] +
+                       current_counts['rare'] + current_counts['extraordinary'] +
+                       current_counts['standard'] + current_counts['unknown'])
+        current_attempts = current_fish + current_counts['airforce']
+        
+        # 更新本次统计显示
+        if current_fish > 0:
+            legendary_rate = (current_counts['legendary'] / current_fish * 100) if current_fish > 0 else 0
+            epic_rate = (current_counts['epic'] / current_fish * 100) if current_fish > 0 else 0
+            rare_rate = (current_counts['rare'] / current_fish * 100) if current_fish > 0 else 0
+            extraordinary_rate = (current_counts['extraordinary'] / current_fish * 100) if current_fish > 0 else 0
+            standard_rate = (current_counts['standard'] / current_fish * 100) if current_fish > 0 else 0
+            unknown_rate = (current_counts['unknown'] / current_fish * 100) if current_fish > 0 else 0
+            
+            self.current_display_legendary_label.config(text=f"{current_counts['legendary']}条 ({legendary_rate:.1f}%)")
+            self.current_display_epic_label.config(text=f"{current_counts['epic']}条 ({epic_rate:.1f}%)")
+            self.current_display_rare_label.config(text=f"{current_counts['rare']}条 ({rare_rate:.1f}%)")
+            self.current_display_extraordinary_label.config(text=f"{current_counts['extraordinary']}条 ({extraordinary_rate:.1f}%)")
+            self.current_display_standard_label.config(text=f"{current_counts['standard']}条 ({standard_rate:.1f}%)")
+            self.current_display_unknown_label.config(text=f"{current_counts['unknown']}条 ({unknown_rate:.1f}%)")
+        else:
+            self.current_display_legendary_label.config(text=f"{current_counts['legendary']}条 (0.0%)")
+            self.current_display_epic_label.config(text=f"{current_counts['epic']}条 (0.0%)")
+            self.current_display_rare_label.config(text=f"{current_counts['rare']}条 (0.0%)")
+            self.current_display_extraordinary_label.config(text=f"{current_counts['extraordinary']}条 (0.0%)")
+            self.current_display_standard_label.config(text=f"{current_counts['standard']}条 (0.0%)")
+            self.current_display_unknown_label.config(text=f"{current_counts['unknown']}条 (0.0%)")
+            
+        current_airforce_rate = (current_counts['airforce'] / current_attempts * 100) if current_attempts > 0 else 0
+        self.current_display_airforce_label.config(text=f"{current_counts['airforce']}次 ({current_airforce_rate:.1f}%)")
+        
+        # 更新本次样本量
+        self.current_sample_label.config(text=f"{current_attempts}次")
+        
+        # 加载所有统计数据（当前+归档）
+        all_stats = self.load_all_statistics()
+        all_records = all_stats.get("records", [])
+        
+        # 统计所有文件各稀有度数量
         total_counts = {
-            'legendary': history_counts['legendary'] + legendary_count,
-            'epic': history_counts['epic'] + epic_count,
-            'rare': history_counts['rare'] + rare_count,
-            'extraordinary': history_counts['extraordinary'] + extraordinary_count,
-            'standard': history_counts['standard'] + standard_count,
-            'unknown': history_counts['unknown'] + unknown_count,
-            'airforce': history_counts['airforce'] + airforce_count
+            'legendary': 0,
+            'epic': 0,
+            'rare': 0,
+            'extraordinary': 0,
+            'standard': 0,
+            'unknown': 0,
+            'airforce': 0
         }
+        
+        for record in all_records:
+            rarity = record.get('rarity', 'airforce')
+            if rarity in total_counts:
+                total_counts[rarity] += 1
         
         total_fish = (total_counts['legendary'] + total_counts['epic'] +
                      total_counts['rare'] + total_counts['extraordinary'] +
@@ -518,8 +610,11 @@ class FishingGUI:
             self.total_standard_label.config(text=f"{total_counts['standard']}条 (0.0%)")
             self.total_unknown_label.config(text=f"{total_counts['unknown']}条 (0.0%)")
             
-        airforce_rate = (total_counts['airforce'] / total_attempts * 100) if total_attempts > 0 else 0
-        self.total_airforce_label.config(text=f"{total_counts['airforce']}次 ({airforce_rate:.1f}%)")
+        total_airforce_rate = (total_counts['airforce'] / total_attempts * 100) if total_attempts > 0 else 0
+        self.total_airforce_label.config(text=f"{total_counts['airforce']}次 ({total_airforce_rate:.1f}%)")
+        
+        # 更新总和样本量
+        self.total_sample_label.config(text=f"{total_attempts}次")
 
     def refresh_statistics(self):
         """刷新统计信息"""
