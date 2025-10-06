@@ -193,12 +193,13 @@ class FishingGUI:
         
     def create_compact_stat_labels(self, parent, stat_type):
         """创建精简统计标签"""
-        # 稀有度标签 - 只显示主要鱼类
+        # 稀有度标签 - 显示所有鱼类
         rarities = [
             ('legendary', '传奇'),
             ('epic', '史诗'),
             ('rare', '稀有'),
             ('extraordinary', '非凡'),
+            ('standard', '标准'),
             ('airforce', '空军')
         ]
         
@@ -206,20 +207,20 @@ class FishingGUI:
         row_frame = tk.Frame(parent, bg='#3c3c3c')
         row_frame.pack(fill=tk.X, pady=1)
         
-        # 添加图例说明
+        # 所有鱼类在一行显示
         for i, (rarity, zh_name) in enumerate(rarities):
             # 创建彩色圆点作为图例
             dot_frame = tk.Frame(row_frame, bg='#3c3c3c')
-            dot_frame.pack(side=tk.LEFT, padx=2)
+            dot_frame.pack(side=tk.LEFT, padx=1)
             
             # 创建彩色圆点
-            dot = tk.Label(dot_frame, text="●", bg='#3c3c3c', fg=RARITY_COLORS[rarity], font=('Microsoft YaHei', 10))
+            dot = tk.Label(dot_frame, text="●", bg='#3c3c3c', fg=RARITY_COLORS[rarity], font=('Microsoft YaHei', 9))
             dot.pack(side=tk.LEFT)
             
             # 创建数值标签
-            label_value = tk.Label(dot_frame, text="0", bg='#3c3c3c', fg=RARITY_COLORS[rarity], font=('Microsoft YaHei', 8, 'bold'))
+            label_value = tk.Label(dot_frame, text="0", bg='#3c3c3c', fg=RARITY_COLORS[rarity], font=('Microsoft YaHei', 7, 'bold'))
             setattr(self, f"current_{rarity}_label", label_value)
-            label_value.pack(side=tk.LEFT, padx=(1, 5))
+            label_value.pack(side=tk.LEFT, padx=(0, 4))
     
     def create_dual_column_stat_labels(self, parent):
         """创建双列统计标签 - 本次和历史总和"""
@@ -446,6 +447,7 @@ class FishingGUI:
         self.current_epic_label.config(text=f"{epic_count}")
         self.current_rare_label.config(text=f"{rare_count}")
         self.current_extraordinary_label.config(text=f"{extraordinary_count}")
+        self.current_standard_label.config(text=f"{standard_count}")
         self.current_airforce_label.config(text=f"{airforce_count}")
         
         # 更新双列显示中的本次统计
@@ -560,7 +562,7 @@ class FishingGUI:
         self.current_display_airforce_label.config(text=f"{current_counts['airforce']}次 ({current_airforce_rate:.1f}%)")
         
         # 更新本次样本量
-        self.current_sample_label.config(text=f"{current_attempts}次")
+        self.current_sample_label.config(text=f"{current_attempts}杆")
         
         # 加载所有统计数据（当前+归档）
         all_stats = self.load_all_statistics()
@@ -614,7 +616,7 @@ class FishingGUI:
         self.total_airforce_label.config(text=f"{total_counts['airforce']}次 ({total_airforce_rate:.1f}%)")
         
         # 更新总和样本量
-        self.total_sample_label.config(text=f"{total_attempts}次")
+        self.total_sample_label.config(text=f"{total_attempts}杆")
 
     def refresh_statistics(self):
         """刷新统计信息"""
@@ -1530,7 +1532,7 @@ def auto_fish_once():
     """执行一轮完整的自动钓鱼流程"""
     global legendary_count, epic_count, rare_count, extraordinary_count, standard_count, unknown_count, airforce_count
     
-    gui.add_log("="*20 + " 开始新一轮钓鱼 " + "="*20, 'INFO')
+    gui.add_log("=== 开始新一轮钓鱼 ===", 'INFO')
     
     # 1. 抛竿
     gui.add_log("抛竿中...", 'STATUS')
@@ -1680,7 +1682,7 @@ def auto_fish_once():
             gui.add_log(f"这次钓到了{zh_name}鱼", 'SUCCESS')
     
     if hasattr(gui, 'add_log'):
-        gui.add_log("="*20 + " 本轮钓鱼结束 " + "="*20, 'INFO')
+        gui.add_log("=== 本轮钓鱼结束 ===", 'INFO')
     # 使用可中断的等待
     elapsed = 0
     while elapsed < 2 and is_running:
@@ -1741,15 +1743,22 @@ if __name__ == "__main__":
     listener_thread.start()
     
     # 显示初始信息
-    gui.add_log("="*50, 'INFO')
+    gui.add_log("="*44, 'INFO')
     gui.add_log("猛兽派对 - 自动钓鱼脚本", 'INFO')
     gui.add_log("作者: Fox, 由SammFang改版", 'INFO')
-    gui.add_log("="*50, 'INFO')
+    gui.add_log("="*44, 'INFO')
     gui.add_log("请将游戏窗口置于前台，脚本开始后不要移动窗口。", 'WARNING')
     gui.add_log("按 Ctrl+L 可以暂停或恢复脚本。", 'WARNING')
     gui.add_log(f"按 Ctrl+K 可以{'创建统计文件并' if not STATISTICS_ENABLED else ''}切换统计功能。", 'INFO')
     gui.add_log("按 Ctrl+K+Enter 可以归档当前统计文件并创建新的统计文件。", 'INFO')
     gui.add_log("按 'q' 可以紧急终止脚本。", 'WARNING')
+    
+    # 自动刷新统计信息
+    if STATISTICS_ENABLED:
+        gui.add_log("正在加载统计数据...", 'INFO')
+        gui.refresh_statistics()
+    else:
+        gui.add_log("统计功能未启用，按 Ctrl+K 可以启用统计功能", 'WARNING')
     
     # 启动GUI主循环
     root.mainloop()
