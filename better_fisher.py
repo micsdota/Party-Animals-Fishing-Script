@@ -214,6 +214,8 @@ def display_statistics():
     current_total_attempts = len(current_records)
     current_airforce_count = current_rarity_counts['airforce']
     current_airforce_rate = (current_airforce_count / current_total_attempts * 100) if current_total_attempts > 0 else 0
+    # 计算实际钓到的鱼的总数（不包括空军）
+    current_total_fish = current_total_attempts - current_airforce_count
     
     # 加载所有统计文件（当前+归档）
     all_stats = load_all_statistics()
@@ -238,6 +240,8 @@ def display_statistics():
     all_total_attempts = len(all_records)
     all_airforce_count = all_rarity_counts['airforce']
     all_airforce_rate = (all_airforce_count / all_total_attempts * 100) if all_total_attempts > 0 else 0
+    # 计算实际钓到的鱼的总数（不包括空军）
+    all_total_fish = all_total_attempts - all_airforce_count
     
     # 获取当前运行统计（基于内存计数器）
     current_run_fish = legendary_count + epic_count + rare_count + extraordinary_count + standard_count + unknown_count
@@ -246,7 +250,7 @@ def display_statistics():
     
     # 打印统计信息
     cprint("\n" + "="*50, C_INFO)
-    cprint("\n" + "📊 钓鱼统计信息", C_INFO)
+    cprint("📊 钓鱼统计信息", C_INFO)
     cprint("="*50 + "\n", C_INFO)
     
     chinese_rarity_names = {
@@ -263,8 +267,9 @@ def display_statistics():
         all_count = all_rarity_counts[rarity]
         
         if current_count > 0 or all_count > 0:  # 显示有数据的项
-            current_rate = (current_count / current_total_attempts * 100) if current_total_attempts > 0 else 0
-            all_rate = (all_count / all_total_attempts * 100) if all_total_attempts > 0 else 0
+            # 修改：只计算占实际钓到的鱼的百分比（不包括空军）
+            current_rate = (current_count / current_total_fish * 100) if current_total_fish > 0 else 0
+            all_rate = (all_count / all_total_fish * 100) if all_total_fish > 0 else 0
             zh_name = chinese_rarity_names[rarity]
             color = rarity_fg_colors[rarity] if rarity != 'unknown' else C_GRAY
             
@@ -277,7 +282,7 @@ def display_statistics():
     # 显示空军统计（总是显示，即使为0）
     cprint(f"空军: {current_airforce_count}次 ({current_airforce_rate:.2f}%)    |  共 {all_airforce_count}次 ({all_airforce_rate:.2f}%)", C_GRAY)
     
-    cprint(f"总计: {current_total_attempts}次            |  共 {all_total_attempts}次", C_INFO)
+    cprint(f"样本量: {current_total_attempts}次            |  共 {all_total_attempts}次", C_INFO)
 
     cprint("\n" + "="*50 + "\n", C_INFO)
 
@@ -1210,14 +1215,35 @@ def auto_fish_once():
     total_fish = legendary_count + epic_count + rare_count + extraordinary_count + standard_count + unknown_count
     total_attempts = total_fish + airforce_count
     airforce_rate = (airforce_count / total_attempts * 100) if total_attempts > 0 else 0
+    
+    # 计算每种鱼占实际钓到鱼的百分比（不包括空军）
     cprint("本次运行统计: ", C_DEBUG, end='')
-    cprint(f"传奇{legendary_count}条", rarity_fg_colors['legendary'], end=', ')
-    cprint(f"史诗{epic_count}条", rarity_fg_colors['epic'], end=', ')
-    cprint(f"稀有{rare_count}条", rarity_fg_colors['rare'], end=', ')
-    cprint(f"非凡{extraordinary_count}条", rarity_fg_colors['extraordinary'], end=', ')
-    cprint(f"标准{standard_count}条", rarity_fg_colors['standard'], end=', ')
-    cprint(f"未知{unknown_count}条", C_GRAY, end=', ')
-    cprint(f"空军{airforce_count}次, 空军率{airforce_rate:.1f}%", C_GRAY)
+    
+    # 显示各稀有度鱼的百分比（只占实际钓到的鱼的比例）
+    if total_fish > 0:
+        legendary_rate = (legendary_count / total_fish * 100) if total_fish > 0 else 0
+        epic_rate = (epic_count / total_fish * 100) if total_fish > 0 else 0
+        rare_rate = (rare_count / total_fish * 100) if total_fish > 0 else 0
+        extraordinary_rate = (extraordinary_count / total_fish * 100) if total_fish > 0 else 0
+        standard_rate = (standard_count / total_fish * 100) if total_fish > 0 else 0
+        unknown_rate = (unknown_count / total_fish * 100) if total_fish > 0 else 0
+        
+        cprint(f"传奇{legendary_count}条({legendary_rate:.1f}%)", rarity_fg_colors['legendary'], end=', ')
+        cprint(f"史诗{epic_count}条({epic_rate:.1f}%)", rarity_fg_colors['epic'], end=', ')
+        cprint(f"稀有{rare_count}条({rare_rate:.1f}%)", rarity_fg_colors['rare'], end=', ')
+        cprint(f"非凡{extraordinary_count}条({extraordinary_rate:.1f}%)", rarity_fg_colors['extraordinary'], end=', ')
+        cprint(f"标准{standard_count}条({standard_rate:.1f}%)", rarity_fg_colors['standard'], end=', ')
+        cprint(f"未知{unknown_count}条({unknown_rate:.1f}%)", C_GRAY, end=", ")
+        cprint(f"空军{airforce_count}次({airforce_rate:.1f}%)", C_GRAY)
+    else:
+        # 如果没有钓到任何鱼，只显示数量
+        cprint(f"传奇{legendary_count}条", rarity_fg_colors['legendary'], end=', ')
+        cprint(f"史诗{epic_count}条", rarity_fg_colors['epic'], end=', ')
+        cprint(f"稀有{rare_count}条", rarity_fg_colors['rare'], end=', ')
+        cprint(f"非凡{extraordinary_count}条", rarity_fg_colors['extraordinary'], end=', ')
+        cprint(f"标准{standard_count}条", rarity_fg_colors['standard'], end=', ')
+        cprint(f"未知{unknown_count}条", C_GRAY, end=', ')
+        cprint(f"空军{airforce_count}次({airforce_rate:.1f}%)", C_GRAY)
     
     cprint("="*20 + " 本轮钓鱼结束 " + "="*20, C_INFO)
     # 使用可中断的等待
