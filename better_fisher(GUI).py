@@ -320,7 +320,7 @@ class FishingGUI:
         control_frame = tk.Frame(status_card, bg='#3c3c3c')
         control_frame.pack(fill=tk.X, padx=10, pady=10)
         
-        self.start_btn = ttk.Button(control_frame, text="▶ 开始钓鱼", command=self.start_fishing)
+        self.start_btn = ttk.Button(control_frame, text="▶ 开始钓鱼", command=self.start_fishing, state=tk.DISABLED)
         self.start_btn.pack(fill=tk.X, pady=2)
         
         self.stop_btn = ttk.Button(control_frame, text="⏸ 暂停钓鱼", command=self.stop_fishing, state=tk.DISABLED)
@@ -631,7 +631,17 @@ class FishingGUI:
         
     def start_fishing(self):
         """开始钓鱼"""
-        global is_running
+        global is_running, hwnd
+
+        # 自动聚焦到游戏窗口
+        try:
+            self.add_log("正在聚焦到 '猛兽派对' 游戏窗口...", 'INFO')
+            win32gui.SetForegroundWindow(hwnd)
+            time.sleep(0.5) # 等待窗口激活
+        except Exception as e:
+            self.add_log(f"自动聚焦窗口失败: {e}", 'WARNING')
+            self.add_log("请手动点击游戏窗口以确保脚本正常工作。", 'WARNING')
+
         is_running = True
         
         self.start_btn.config(state=tk.DISABLED)
@@ -1736,6 +1746,7 @@ if __name__ == "__main__":
                 window_initialized = True
                 gui.add_log("游戏窗口检测成功", 'SUCCESS')
                 gui.status_label.config(text="● 就绪", fg='#00FF00')
+                gui.start_btn.config(state=tk.NORMAL)
                 
                 # 初始化ROI
                 if not initialize_roi():
