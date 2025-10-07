@@ -59,6 +59,7 @@ STATISTICS_FILE = "statistics-content.json"
 # 全局变量
 is_running = True  # 控制主循环是否运行
 statistics_only_mode = False  # 仅统计模式标志
+afk_mode = False  # 挂机防踢模式标志
 legendary_count = 0
 epic_count = 0
 rare_count = 0
@@ -390,7 +391,7 @@ class FishingGUI:
         ttk.Label(shortcut_frame, text="快捷键:", style='Info.TLabel').pack(anchor=tk.W)
         
         shortcuts = [
-            "Ctrl+L: 暂停/恢复",
+            "Ctrl+L: 暂停/恢复/停止挂机",
             "Ctrl+K: 切换统计",
             "Ctrl+K+Enter: 归档",
             "Ctrl+M: 切换仅统计",
@@ -418,9 +419,9 @@ class FishingGUI:
         
         # 日志文本区域
         self.log_text = scrolledtext.ScrolledText(
-            log_card, 
-            wrap=tk.WORD, 
-            width=50, 
+            log_card,
+            wrap=tk.WORD,
+            width=50,
             height=20,
             bg='#1e1e1e',
             fg='#CCCCCC',
@@ -437,6 +438,18 @@ class FishingGUI:
         self.log_text.tag_config('STATUS', foreground='#FFFF00')
         self.log_text.tag_config('DEBUG', foreground='#CCCCCC')
         
+        # 挂机防踢功能板块
+        afk_frame = tk.Frame(log_card, bg='#3c3c3c')
+        afk_frame.pack(fill=tk.X, padx=10, pady=(0, 10))
+        
+        # 分隔线
+        separator = tk.Frame(afk_frame, bg='#555555', height=1)
+        separator.pack(fill=tk.X, pady=(0, 5))
+        
+        # 挂机防踢按钮
+        self.afk_btn = ttk.Button(afk_frame, text="挂机防踢", command=self.toggle_afk_mode)
+        self.afk_btn.pack(fill=tk.X, pady=2)
+        
     def update_stats_status(self):
         """更新统计功能状态"""
         if STATISTICS_ENABLED:
@@ -446,8 +459,10 @@ class FishingGUI:
             
     def update_mode_indicator(self):
         """更新模式指示器"""
-        global statistics_only_mode
-        if statistics_only_mode:
+        global statistics_only_mode, afk_mode
+        if afk_mode:
+            self.mode_indicator.config(text="（挂机）")
+        elif statistics_only_mode:
             self.mode_indicator.config(text="（仅统计）")
         else:
             self.mode_indicator.config(text="（托管）")
@@ -816,10 +831,115 @@ class FishingGUI:
         except Exception as e:
             self.add_log(f"归档统计文件失败: {e}", 'ERROR')
             
+    def toggle_afk_mode(self):
+        """切换挂机防踢模式"""
+        global afk_mode, is_running
+        afk_mode = not afk_mode
+        
+        if afk_mode:
+            # 停止当前运行的钓鱼功能
+            if is_running:
+                self.stop_fishing()
+            
+            # 禁用其他功能按钮
+            self.start_btn.config(state=tk.DISABLED)
+            self.stop_btn.config(state=tk.DISABLED)
+            self.toggle_stats_btn.config(state=tk.DISABLED)
+            self.archive_stats_btn.config(state=tk.DISABLED)
+            self.toggle_mode_btn.config(state=tk.DISABLED)
+            
+            # 更新按钮文本和状态
+            self.afk_btn.config(text="停止挂机防踢")
+            self.status_label.config(text="● 挂机中", fg='#FFAA00')
+            
+            # 更新模式指示器
+            self.update_mode_indicator()
+            
+            self.add_log("挂机防踢模式已启动，每30秒(±10秒)随机按键", 'SUCCESS')
+            self.add_log("按 Ctrl+L 可停止挂机防踢模式", 'INFO')
+            
+            # 启动挂机防踢线程
+            afk_thread = threading.Thread(target=self.afk_loop, daemon=True)
+            afk_thread.start()
+        else:
+            # 恢复其他功能按钮状态
+            if window_initialized:
+                self.start_btn.config(state=tk.NORMAL)
+            self.toggle_stats_btn.config(state=tk.NORMAL)
+            self.archive_stats_btn.config(state=tk.NORMAL)
+            self.toggle_mode_btn.config(state=tk.NORMAL)
+            
+            # 更新按钮文本和状态
+            self.afk_btn.config(text="挂机防踢")
+            self.status_label.config(text="● 就绪", fg='#00FF00')
+            
+            # 更新模式指示器
+            self.update_mode_indicator()
+            
+            self.add_log("挂机防踢模式已停止", 'SUCCESS')
+    
+    def afk_loop(self):
+        """挂机防踢循环"""
+        global afk_mode
+        
+        # 启动时先聚焦到游戏窗口
+        try:
+            win32gui.SetForegroundWindow(hwnd)
+            self.root.after(0, lambda: self.add_log("挂机防踢已聚焦到游戏窗口", 'INFO'))
+            time.sleep(0.5)
+        except Exception as e:
+            self.root.after(0, lambda: self.add_log(f"聚焦游戏窗口失败: {e}", 'WARNING'))
+        
+        while afk_mode:
+            # 随机等待时间：30秒 ± 10秒 (20-40秒)
+            wait_time = random.uniform(20, 40)
+            
+            # 使用可中断的等待
+            elapsed = 0
+            while elapsed < wait_time and afk_mode:
+                time.sleep(0.1)
+                elapsed += 0.1
+                
+                # 检查是否按下Ctrl+L
+                if USE_KEYBOARD and keyboard.is_pressed('ctrl+l'):
+                    self.root.after(0, self.toggle_afk_mode)
+                    return
+            
+            if not afk_mode:
+                break
+                
+            # 随机选择一个按键
+            keys = ['tab', 'w', 'a', 's', 'd', 'space']
+            random_key = random.choice(keys)
+            
+            # 随机按键时长：0.2到0.5秒
+            press_duration = random.uniform(0.2, 0.5)
+            
+            try:
+                # 按下按键
+                keyboard.press(random_key)
+                
+                # 保持按下状态
+                time.sleep(press_duration)
+                
+                # 释放按键
+                keyboard.release(random_key)
+                    
+                self.root.after(0, lambda k=random_key, d=press_duration: self.add_log(f"挂机防踢: 按下了 {k} 键 ({d:.2f}秒)", 'DEBUG'))
+                
+            except Exception as e:
+                # 确保按键被释放
+                try:
+                    keyboard.release(random_key)
+                except:
+                    pass
+                self.root.after(0, lambda: self.add_log(f"挂机防踢按键失败: {e}", 'WARNING'))
+    
     def on_closing(self):
         """关闭窗口时的处理"""
-        global is_running
+        global is_running, afk_mode
         is_running = False
+        afk_mode = False
         time.sleep(0.5)  # 等待线程结束
         self.root.destroy()
 
@@ -1930,7 +2050,11 @@ def keyboard_listener():
     while True:
         if USE_KEYBOARD:
             if keyboard.is_pressed('ctrl+l'):
-                if is_running:
+                global afk_mode
+                if afk_mode:
+                    # 如果在挂机模式，停止挂机
+                    gui.toggle_afk_mode()
+                elif is_running:
                     gui.stop_fishing()
                 else:
                     gui.start_fishing()
@@ -2013,3 +2137,161 @@ if __name__ == "__main__":
     
     # 启动GUI主循环
     root.mainloop()
+
+# --- 仅统计模式的钓鱼逻辑 ---
+def auto_fish_logger_once():
+    """仅统计模式下的钓鱼记录逻辑（不执行任何游戏操作）"""
+    global legendary_count, epic_count, rare_count, extraordinary_count, standard_count, unknown_count, airforce_count
+    
+    gui.add_log("=== 开始仅统计模式记录 ===", 'INFO')
+    
+    # 1. 等待鱼咬钩
+    if not bite_check_logger():
+        gui.add_log("本轮未检测到咬钩或被中断", 'WARNING')
+        return
+    
+    # 2. 检测到咬钩后等待2秒
+    gui.add_log("检测到叹号后等待2秒...", 'STATUS')
+    elapsed = 0
+    while elapsed < 2 and is_running:
+        time.sleep(0.01)
+        elapsed += 0.01
+    if not is_running:
+        return
+    
+    # 3. 开始检测压力表盘是否消失
+    gui.add_log("开始检测压力表盘是否消失...", 'STATUS')
+    base_color_orange = (255, 195, 83)
+    start_time = time.time()
+    timeout = 30
+    
+    while is_running:
+        if time.time() - start_time > timeout:
+            gui.add_log("检测压力表盘超时（30秒），判定为空军", 'WARNING')
+            airforce_count += 1
+            record_fishing_result('airforce')
+            gui.add_log("这次钓鱼空军", 'WARNING')
+            break
+        
+        try:
+            color_exist = get_pointer_color(CHECK_X, CHECK_Y)
+        except Exception as e:
+            gui.add_log(f"读取像素失败: {e}", 'WARNING')
+            time.sleep(0.1)
+            continue
+        
+        if color_changed(base_color_orange, color_exist, tolerance=100):
+            gui.add_log("检测到压力表盘消失，开始检测稀有度...", 'SUCCESS')
+            
+            # 等待0.4秒让UI稳定
+            elapsed = 0
+            while elapsed < 0.4 and is_running:
+                time.sleep(0.01)
+                elapsed += 0.01
+            if not is_running:
+                return
+            
+            # 根据不同分辨率设置不同的检测区域
+            center_x = window_left + window_width // 2
+            if window_width == 1920 and window_height == 1080:
+                region = (window_top + 160, window_left + 875, window_top + 200, window_left + 960)
+            elif window_width == 3840 and window_height == 2160:
+                region = (window_top + 230, center_x - 130, window_top + 320, center_x + 20)
+            else:
+                region = (window_top + 190, center_x - 130, window_top + 250, center_x + 20)
+            
+            # 检测鱼的稀有度
+            rarity = detect_fish_unified(region, rarity_threshold=0.1, indicator_threshold=0.05, tolerance=5)
+            
+            if rarity != 'airforce':
+                gui.add_log(f"钓鱼成功！稀有度: {rarity}", 'SUCCESS')
+            else:
+                gui.add_log("判定为空军", 'WARNING')
+            
+            # 更新计数器
+            if rarity == 'legendary':
+                legendary_count += 1
+            elif rarity == 'epic':
+                epic_count += 1
+            elif rarity == 'rare':
+                rare_count += 1
+            elif rarity == 'extraordinary':
+                extraordinary_count += 1
+            elif rarity == 'standard':
+                standard_count += 1
+            elif rarity == 'unknown':
+                unknown_count += 1
+            elif rarity == 'airforce':
+                airforce_count += 1
+            
+            # 记录结果
+            record_fishing_result(rarity)
+            
+            # 打印本次结果
+            if rarity == 'airforce':
+                gui.add_log("这次钓鱼空军", 'WARNING')
+            elif rarity == 'unknown':
+                gui.add_log("这次钓到了鱼，但稀有度未知", 'WARNING')
+            else:
+                chinese_rarity = {
+                    'legendary': '传奇',
+                    'epic': '史诗',
+                    'rare': '稀有',
+                    'extraordinary': '非凡',
+                    'standard': '标准'
+                }
+                zh_name = chinese_rarity[rarity]
+                gui.add_log(f"这次钓到了{zh_name}鱼", 'SUCCESS')
+            break
+        
+        time.sleep(0.1)
+    
+    gui.add_log("=== 仅统计模式记录结束 ===", 'INFO')
+    
+    # 使用可中断的等待
+    elapsed = 0
+    while elapsed < 2 and is_running:
+        time.sleep(0.01)
+        elapsed += 0.01
+
+def bite_check_logger():
+    """仅统计模式下的咬钩检测（不执行任何游戏操作）"""
+    gui.add_log(f"等待鱼咬钩（仅统计模式）...", 'STATUS')
+    timeout = 40
+    start_time = time.time()
+    
+    check_interval = 0.1  # 每0.1秒检测一次
+    
+    while is_running:
+        # 使用可中断的等待
+        elapsed = 0
+        while elapsed < check_interval and is_running:
+            time.sleep(0.01)  # 小段睡眠，便于快速响应中断
+            elapsed += 0.01
+        
+        if not is_running:
+            break
+            
+        # 1. 快速颜色定位
+        try:
+            screenshot = pyautogui.screenshot(region=roi_search_area)
+            img_bgr = cv2.cvtColor(np.array(screenshot), cv2.COLOR_RGB2BGR)
+        except Exception as e:
+            gui.add_log(f"截图失败: {e}", 'WARNING')
+            continue
+            
+        blob_center = find_yellow_blob(img_bgr)
+        
+        if blob_center:
+            # 2. 精确OpenCV模板验证
+            if verify_with_opencv(img_bgr, blob_center, threshold=0.5):
+                gui.add_log("检测到叹号！（仅统计模式）", 'SUCCESS')
+                return True
+
+        # 判断是否超时
+        if time.time() - start_time >= timeout:
+            gui.add_log("咬钩检测超时，未检测到鱼", 'WARNING')
+            return False
+            
+    gui.add_log("咬钩检测被中断", 'INFO')
+    return False
