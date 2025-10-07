@@ -1764,98 +1764,6 @@ def auto_fish_once():
         time.sleep(0.01)
         elapsed += 0.01
 
-# --- 键盘监听 ---
-def keyboard_listener():
-    """监听键盘事件，用于暂停/恢复脚本和切换统计功能"""
-    ctrl_k_pressed = False  # 跟踪Ctrl+K是否被按下
-    
-    while True:
-        if USE_KEYBOARD:
-            if keyboard.is_pressed('ctrl+l'):
-                if is_running:
-                    gui.stop_fishing()
-                else:
-                    gui.start_fishing()
-                time.sleep(0.5)  # 防止按键重复检测
-            elif keyboard.is_pressed('ctrl+k'):
-                if not ctrl_k_pressed:
-                    ctrl_k_pressed = True
-                    gui.toggle_statistics()
-                    time.sleep(0.5)  # 防止按键重复检测
-            elif keyboard.is_pressed('enter') and ctrl_k_pressed:
-                # Ctrl+K+Enter 组合键：归档统计文件
-                gui.archive_statistics()
-                ctrl_k_pressed = False  # 重置状态
-                time.sleep(0.5)  # 防止按键重复检测
-            elif keyboard.is_pressed('ctrl+m'):
-                # Ctrl+M 组合键：切换仅统计模式
-                gui.toggle_statistics_mode()
-                time.sleep(0.5)  # 防止按键重复检测
-            else:
-                # 如果Ctrl+K被释放，重置状态
-                if ctrl_k_pressed and not keyboard.is_pressed('ctrl+k'):
-                    ctrl_k_pressed = False
-        time.sleep(0.1)
-
-# --- 主程序入口 ---
-if __name__ == "__main__":
-    # 创建主窗口
-    root = tk.Tk()
-    
-    # 创建GUI实例
-    gui = FishingGUI(root)
-    
-    # 初始化ROI
-    # 在后台线程中检测窗口和初始化ROI
-    window_initialized = False
-    def window_detection_thread():
-        global window_initialized
-        while not window_initialized:
-            if initialize_window():
-                window_initialized = True
-                gui.add_log("游戏窗口检测成功", 'SUCCESS')
-                gui.status_label.config(text="● 就绪", fg='#00FF00')
-                gui.start_btn.config(state=tk.NORMAL)
-                
-                # 初始化ROI
-                if not initialize_roi():
-                    gui.add_log("初始化ROI失败", 'ERROR')
-                else:
-                    gui.add_log("ROI初始化成功", 'SUCCESS')
-            else:
-                gui.add_log("错误: 未找到 '猛兽派对' 游戏窗口，请确保游戏正在运行。", 'ERROR')
-                gui.add_log("程序将继续每0.5秒检测一次窗口，直到找到游戏窗口为止...", 'WARNING')
-                gui.status_label.config(text="● 等待游戏窗口", fg='#FFAA00')
-                time.sleep(0.5)
-    
-    # 启动窗口检测线程
-    detection_thread = threading.Thread(target=window_detection_thread, daemon=True)
-    detection_thread.start()
-    # 在后台启动键盘监听线程
-    listener_thread = threading.Thread(target=keyboard_listener, daemon=True)
-    listener_thread.start()
-    
-    # 显示初始信息
-    gui.add_log("="*44, 'INFO')
-    gui.add_log("猛兽派对 - 自动钓鱼脚本", 'INFO')
-    gui.add_log("作者: Fox, 由SammFang改版", 'INFO')
-    gui.add_log("="*44, 'INFO')
-    gui.add_log("请将游戏窗口置于前台，脚本开始后不要移动窗口。", 'WARNING')
-    gui.add_log("按 Ctrl+L 可以暂停或恢复脚本。", 'WARNING')
-    gui.add_log(f"按 Ctrl+K 可以{'创建统计文件并' if not STATISTICS_ENABLED else ''}切换统计功能。", 'INFO')
-    gui.add_log("按 Ctrl+K+Enter 可以归档当前统计文件并创建新的统计文件。", 'INFO')
-    gui.add_log("按 'q' 可以紧急终止脚本。", 'WARNING')
-    
-    # 自动刷新统计信息
-    if STATISTICS_ENABLED:
-        gui.add_log("正在加载统计数据...", 'INFO')
-        gui.refresh_statistics()
-    else:
-        gui.add_log("统计功能未启用，按 Ctrl+K 可以启用统计功能", 'WARNING')
-    
-    # 启动GUI主循环
-    root.mainloop()
-
 # --- 仅统计模式的钓鱼逻辑 ---
 def auto_fish_logger_once():
     """仅统计模式下的钓鱼记录逻辑（不执行任何游戏操作）"""
@@ -2013,3 +1921,95 @@ def bite_check_logger():
             
     gui.add_log("咬钩检测被中断", 'INFO')
     return False
+
+# --- 键盘监听 ---
+def keyboard_listener():
+    """监听键盘事件，用于暂停/恢复脚本和切换统计功能"""
+    ctrl_k_pressed = False  # 跟踪Ctrl+K是否被按下
+    
+    while True:
+        if USE_KEYBOARD:
+            if keyboard.is_pressed('ctrl+l'):
+                if is_running:
+                    gui.stop_fishing()
+                else:
+                    gui.start_fishing()
+                time.sleep(0.5)  # 防止按键重复检测
+            elif keyboard.is_pressed('ctrl+k'):
+                if not ctrl_k_pressed:
+                    ctrl_k_pressed = True
+                    gui.toggle_statistics()
+                    time.sleep(0.5)  # 防止按键重复检测
+            elif keyboard.is_pressed('enter') and ctrl_k_pressed:
+                # Ctrl+K+Enter 组合键：归档统计文件
+                gui.archive_statistics()
+                ctrl_k_pressed = False  # 重置状态
+                time.sleep(0.5)  # 防止按键重复检测
+            elif keyboard.is_pressed('ctrl+m'):
+                # Ctrl+M 组合键：切换仅统计模式
+                gui.toggle_statistics_mode()
+                time.sleep(0.5)  # 防止按键重复检测
+            else:
+                # 如果Ctrl+K被释放，重置状态
+                if ctrl_k_pressed and not keyboard.is_pressed('ctrl+k'):
+                    ctrl_k_pressed = False
+        time.sleep(0.1)
+
+# --- 主程序入口 ---
+if __name__ == "__main__":
+    # 创建主窗口
+    root = tk.Tk()
+    
+    # 创建GUI实例
+    gui = FishingGUI(root)
+    
+    # 初始化ROI
+    # 在后台线程中检测窗口和初始化ROI
+    window_initialized = False
+    def window_detection_thread():
+        global window_initialized
+        while not window_initialized:
+            if initialize_window():
+                window_initialized = True
+                gui.add_log("游戏窗口检测成功", 'SUCCESS')
+                gui.status_label.config(text="● 就绪", fg='#00FF00')
+                gui.start_btn.config(state=tk.NORMAL)
+                
+                # 初始化ROI
+                if not initialize_roi():
+                    gui.add_log("初始化ROI失败", 'ERROR')
+                else:
+                    gui.add_log("ROI初始化成功", 'SUCCESS')
+            else:
+                gui.add_log("错误: 未找到 '猛兽派对' 游戏窗口，请确保游戏正在运行。", 'ERROR')
+                gui.add_log("程序将继续每0.5秒检测一次窗口，直到找到游戏窗口为止...", 'WARNING')
+                gui.status_label.config(text="● 等待游戏窗口", fg='#FFAA00')
+                time.sleep(0.5)
+    
+    # 启动窗口检测线程
+    detection_thread = threading.Thread(target=window_detection_thread, daemon=True)
+    detection_thread.start()
+    # 在后台启动键盘监听线程
+    listener_thread = threading.Thread(target=keyboard_listener, daemon=True)
+    listener_thread.start()
+    
+    # 显示初始信息
+    gui.add_log("="*44, 'INFO')
+    gui.add_log("猛兽派对 - 自动钓鱼脚本", 'INFO')
+    gui.add_log("作者: Fox, 由SammFang改版", 'INFO')
+    gui.add_log("="*44, 'INFO')
+    gui.add_log("请将游戏窗口置于前台，脚本开始后不要移动窗口。", 'WARNING')
+    gui.add_log("按 Ctrl+L 可以暂停或恢复脚本。", 'WARNING')
+    gui.add_log(f"按 Ctrl+K 可以{'创建统计文件并' if not STATISTICS_ENABLED else ''}切换统计功能。", 'INFO')
+    gui.add_log("按 Ctrl+K+Enter 可以归档当前统计文件并创建新的统计文件。", 'INFO')
+    gui.add_log("按 'q' 可以紧急终止脚本。", 'WARNING')
+    
+    # 自动刷新统计信息
+    if STATISTICS_ENABLED:
+        gui.add_log("正在加载统计数据...", 'INFO')
+        gui.refresh_statistics()
+    else:
+        gui.add_log("统计功能未启用，按 Ctrl+K 可以启用统计功能", 'WARNING')
+    
+    # 启动GUI主循环
+    root.mainloop()
