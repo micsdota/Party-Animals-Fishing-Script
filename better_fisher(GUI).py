@@ -342,11 +342,14 @@ class FishingGUI:
         control_frame = tk.Frame(status_card, bg='#3c3c3c')
         control_frame.pack(fill=tk.X, padx=10, pady=10)
         
-        self.start_btn = ttk.Button(control_frame, text="▶ 开始钓鱼", command=self.start_fishing, state=tk.DISABLED)
-        self.start_btn.pack(fill=tk.X, pady=2)
+        # 合并的开始/暂停按钮
+        self.toggle_fishing_btn = ttk.Button(control_frame, text="▶ 开始钓鱼", command=self.toggle_fishing, state=tk.DISABLED)
+        self.toggle_fishing_btn.pack(fill=tk.X, pady=2)
         
-        self.stop_btn = ttk.Button(control_frame, text="⏸ 暂停钓鱼", command=self.stop_fishing, state=tk.DISABLED)
-        self.stop_btn.pack(fill=tk.X, pady=2)
+        # 纠正身位按钮（放在原暂停钓鱼位置）
+        self.correction_enabled_var = tk.BooleanVar(value=True)
+        self.correction_btn = ttk.Button(control_frame, text="关闭纠正身位", command=self.toggle_correction)
+        self.correction_btn.pack(fill=tk.X, pady=2)
         
         # 分隔线
         separator3 = tk.Frame(status_card, bg='#555555', height=1)
@@ -690,41 +693,35 @@ class FishingGUI:
         
         self.add_log("统计信息已刷新", 'SUCCESS')
         
-    def start_fishing(self):
-        """开始钓鱼"""
+    def toggle_fishing(self):
+        """切换钓鱼状态（开始/暂停）"""
         global is_running, hwnd
+        
+        if is_running:
+            # 停止钓鱼
+            is_running = False
+            self.toggle_fishing_btn.config(text="▶ 开始钓鱼", state=tk.NORMAL)
+            self.status_label.config(text="● 已暂停", fg='#FFAA00')
+            self.add_log("钓鱼已暂停", 'WARNING')
+        else:
+            # 开始钓鱼
+            # 自动聚焦到游戏窗口
+            try:
+                self.add_log("正在聚焦到 '猛兽派对' 游戏窗口...", 'INFO')
+                win32gui.SetForegroundWindow(hwnd)
+                time.sleep(0.5) # 等待窗口激活
+            except Exception as e:
+                self.add_log(f"自动聚焦窗口失败: {e}", 'WARNING')
+                self.add_log("请手动点击游戏窗口以确保脚本正常工作。", 'WARNING')
 
-        # 自动聚焦到游戏窗口
-        try:
-            self.add_log("正在聚焦到 '猛兽派对' 游戏窗口...", 'INFO')
-            win32gui.SetForegroundWindow(hwnd)
-            time.sleep(0.5) # 等待窗口激活
-        except Exception as e:
-            self.add_log(f"自动聚焦窗口失败: {e}", 'WARNING')
-            self.add_log("请手动点击游戏窗口以确保脚本正常工作。", 'WARNING')
-
-        is_running = True
-        
-        self.start_btn.config(state=tk.DISABLED)
-        self.stop_btn.config(state=tk.NORMAL)
-        self.status_label.config(text="● 运行中", fg='#00FF00')
-        
-        self.add_log("开始自动钓鱼", 'STATUS')
-        
-        # 在新线程中运行钓鱼逻辑
-        fishing_thread = threading.Thread(target=self.fishing_loop, daemon=True)
-        fishing_thread.start()
-        
-    def stop_fishing(self):
-        """停止钓鱼"""
-        global is_running
-        is_running = False
-        
-        self.start_btn.config(state=tk.NORMAL)
-        self.stop_btn.config(state=tk.DISABLED)
-        self.status_label.config(text="● 已暂停", fg='#FFAA00')
-        
-        self.add_log("钓鱼已暂停", 'WARNING')
+            is_running = True
+            self.toggle_fishing_btn.config(text="⏸ 暂停钓鱼", state=tk.NORMAL)
+            self.status_label.config(text="● 运行中", fg='#00FF00')
+            self.add_log("开始自动钓鱼", 'STATUS')
+            
+            # 在新线程中运行钓鱼逻辑
+            fishing_thread = threading.Thread(target=self.fishing_loop, daemon=True)
+            fishing_thread.start()
         
     def fishing_loop(self):
         """钓鱼循环"""
@@ -788,6 +785,16 @@ class FishingGUI:
             self.toggle_mode_btn.config(text="切换仅统计模式")
             
         self.update_mode_indicator()
+        
+    def toggle_correction(self):
+        """切换纠正身位功能状态"""
+        self.correction_enabled_var.set(not self.correction_enabled_var.get())
+        if self.correction_enabled_var.get():
+            self.correction_btn.config(text="关闭纠正身位")
+            self.add_log("纠正身位功能已启用", 'SUCCESS')
+        else:
+            self.correction_btn.config(text="开启纠正身位")
+            self.add_log("纠正身位功能已禁用", 'WARNING')
             
     def archive_statistics(self):
         """归档统计数据"""
@@ -842,8 +849,7 @@ class FishingGUI:
                 self.stop_fishing()
             
             # 禁用其他功能按钮
-            self.start_btn.config(state=tk.DISABLED)
-            self.stop_btn.config(state=tk.DISABLED)
+            self.toggle_fishing_btn.config(state=tk.DISABLED)
             self.toggle_stats_btn.config(state=tk.DISABLED)
             self.archive_stats_btn.config(state=tk.DISABLED)
             self.toggle_mode_btn.config(state=tk.DISABLED)
@@ -864,7 +870,7 @@ class FishingGUI:
         else:
             # 恢复其他功能按钮状态
             if window_initialized:
-                self.start_btn.config(state=tk.NORMAL)
+                self.toggle_fishing_btn.config(state=tk.NORMAL)
             self.toggle_stats_btn.config(state=tk.NORMAL)
             self.archive_stats_btn.config(state=tk.NORMAL)
             self.toggle_mode_btn.config(state=tk.NORMAL)
@@ -1734,31 +1740,35 @@ def auto_fish_once():
     left_down()
 
     #1.5 纠正身位
-    def async_press_a():
-        sleep_time1 = random.uniform(0.6, 2.1)
-        # 使用可中断的等待
-        elapsed = 0
-        while elapsed < sleep_time1 and is_running:
-            time.sleep(0.01)
-            elapsed += 0.01
-        if not is_running:
-            return
-            
-        keyboard.press('a')
-        sleep_time2 = random.uniform(0.25, 0.38)
-        # 使用可中断的等待
-        elapsed = 0
-        while elapsed < sleep_time2 and is_running:
-            time.sleep(0.01)
-            elapsed += 0.01
-        if not is_running:
+    # 检查纠正身位功能是否启用
+    if hasattr(gui, 'correction_enabled_var') and gui.correction_enabled_var.get():
+        def async_press_a():
+            sleep_time1 = random.uniform(0.6, 2.1)
+            # 使用可中断的等待
+            elapsed = 0
+            while elapsed < sleep_time1 and is_running:
+                time.sleep(0.01)
+                elapsed += 0.01
+            if not is_running:
+                return
+                
+            keyboard.press('a')
+            sleep_time2 = random.uniform(0.25, 0.38)
+            # 使用可中断的等待
+            elapsed = 0
+            while elapsed < sleep_time2 and is_running:
+                time.sleep(0.01)
+                elapsed += 0.01
+            if not is_running:
+                keyboard.release('a')
+                return
+                
             keyboard.release('a')
-            return
-            
-        keyboard.release('a')
-    
-    async_thread = threading.Thread(target=async_press_a)
-    async_thread.start()
+        
+        async_thread = threading.Thread(target=async_press_a)
+        async_thread.start()
+    else:
+        gui.add_log("纠正身位功能已禁用，跳过身位纠正", 'DEBUG')
 
     sleep_time = random.uniform(3.0, 4.0)
     # 使用可中断的等待
@@ -1874,7 +1884,10 @@ def auto_fish_once():
         }
         zh_name = chinese_rarity[reel_result]
         if hasattr(gui, 'add_log'):
-            gui.add_log(f"这次钓到了{zh_name}鱼", 'SUCCESS')
+            if reel_result == 'legendary':
+                gui.add_log("哇！金色传说！", 'SUCCESS')
+            else:
+                gui.add_log(f"这次钓到了{zh_name}鱼", 'SUCCESS')
     
     if hasattr(gui, 'add_log'):
         gui.add_log("=== 本轮钓鱼结束 ===", 'INFO')
@@ -1987,6 +2000,9 @@ def auto_fish_logger_once():
                     'standard': '标准'
                 }
                 zh_name = chinese_rarity[rarity]
+            if rarity == 'legendary':
+                gui.add_log("哇！金色传说！", 'SUCCESS')
+            else:
                 gui.add_log(f"这次钓到了{zh_name}鱼", 'SUCCESS')
             break
         
@@ -2055,9 +2071,9 @@ def keyboard_listener():
                     # 如果在挂机模式，停止挂机
                     gui.toggle_afk_mode()
                 elif is_running:
-                    gui.stop_fishing()
+                    gui.toggle_fishing()
                 else:
-                    gui.start_fishing()
+                    gui.toggle_fishing()
                 time.sleep(0.5)  # 防止按键重复检测
             elif keyboard.is_pressed('ctrl+k'):
                 if not ctrl_k_pressed:
@@ -2097,7 +2113,7 @@ if __name__ == "__main__":
                 window_initialized = True
                 gui.add_log("游戏窗口检测成功", 'SUCCESS')
                 gui.status_label.config(text="● 就绪", fg='#00FF00')
-                gui.start_btn.config(state=tk.NORMAL)
+                gui.toggle_fishing_btn.config(state=tk.NORMAL)
                 
                 # 初始化ROI
                 if not initialize_roi():
@@ -2241,6 +2257,9 @@ def auto_fish_logger_once():
                     'standard': '标准'
                 }
                 zh_name = chinese_rarity[rarity]
+            if rarity == 'legendary':
+                gui.add_log("哇！金色传说！", 'SUCCESS')
+            else:
                 gui.add_log(f"这次钓到了{zh_name}鱼", 'SUCCESS')
             break
         
